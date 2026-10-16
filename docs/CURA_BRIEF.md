@@ -8,17 +8,13 @@ Night 21:00), lets the patient tick doses off, explains each medicine in plain l
 (Gemini), reads it aloud, and opens WhatsApp with a prefilled message to a family contact.
 It organises and explains. It NEVER diagnoses, recommends or changes doses.
 
-## Tech decisions
+## Stack
 
-- FIRST inspect package.json and src/. If the project is vanilla JS, keep vanilla ES modules
-  (no framework). Use Vite + Tailwind CSS (proper build, NOT the CDN script) and a hash router.
-- Keep the existing structure: components/camera.js, components/timeline.js,
-  services/ocrService.js (prescription reading), services/dispatchService.js (WhatsApp),
-  utils/audio.js (speech + chime), utils/storage.js (localStorage), config.js.
-- Add: src/main.js, src/router.js, src/screens/\*.js, src/services/explainService.js,
-  src/utils/schedule.js (shorthand decoding), src/utils/dates.js,
-  src/data/medicines.json, api/read-prescription.js, api/explain-medicine.js (Vercel
-  serverless), .env.example, vercel.json, README.md.
+- Vite + React 18 + Tailwind (built via PostCSS). JSX, functional components, hooks.
+- HashRouter (react-router-dom). One tailwind.config.js from the Stitch tokens.
+- utils/ and services/ stay framework-free JS. Screens and components are .jsx.
+- Never build UI by concatenating HTML strings or using innerHTML.
+- Keep the existing structure: src/utils/storage.js, src/utils/dates.js, src/utils/schedule.js, src/utils/audio.js, src/services/ocrService.js, src/services/dispatchService.js, src/services/explainService.js, src/data/medicines.json, api/read-prescription.js, api/explain-medicine.js, .env.example, vercel.json, README.md.
 - No database, no auth. State in localStorage via utils/storage.js.
 
 ## Design (source of truth: design/stitch/\*.html)

@@ -1,72 +1,50 @@
-# 🌿 Cura — Renaissance Assistive Health Station
+# Cura — Senior-Friendly Medication Companion
 
-> **Transforming chaotic medical handwriting into clean, dignifying, and accessible daily care routines.**
+Cura reads a photographed prescription (often handwritten), lets a caregiver review and approve the schedule, displays it as four daily groups (**Dawn 07:00**, **Midday 13:00**, **Dusk 18:00**, **Night 21:00**), lets the patient tick doses off, explains each medicine in plain language via Gemini, reads it aloud, and opens WhatsApp with a prefilled confirmation message to a family contact.
 
-Cura is a zero-hardware, browser-based assistive health hub built to simplify medical schedule management for elderly individuals, patients in recovery, and their caregivers. By combining multimodal optical recognition with a Renaissance-inspired daylight timeline and automated caregiver dispatch, Cura turns confusing prescriptions into clear, actionable care routines.
-
----
-
-## 🏛️ The Problem & Our Vision
-
-Medical schedules are notoriously difficult to manage:
-* **Doctor Handwriting is Unreadable:** Cursive contractions, Latin shorthand (*b.i.d.*, *p.c.*, *q.d.*), and messy scribbles cause medication errors and anxiety for families.
-* **Clinical Interfaces are Cold & Stressful:** Standard health apps feel like sterile hospital monitors, frustrating elderly users.
-* **Caregiver Isolation:** Family members and caregivers constantly worry whether a dose was taken or if instructions were misread.
-
-**Cura addresses these challenges by:**
-1. Using **Google Gemini 1.5 Flash** to parse handwritten medical shorthand into structured, validated JSON schedules.
-2. Presenting tasks through an **Ambient Daylight Timeline** (*Dawn*, *Midday*, *Dusk*, *Night*) built with warm, high-contrast typography.
-3. Enabling **One-Tap WhatsApp Dispatch** so caregivers stay informed without needing complex backend servers.
+> **Safety Principle:** Cura organises and explains. It **never** diagnoses, recommends, or changes doses.
 
 ---
 
-## ✨ Key Features
+## Stack
 
-* **📷 Multimodal Prescription Scanner:** Hold any handwritten prescription up to the webcam to extract drug names, dosages, frequencies, and meal instructions in seconds.
-* **🌅 Ambient Daylight Cards:** Replaces confusing calendar grids with 4 intuitive daylight time blocks (*Dawn, Midday, Dusk, Night*).
-* **🔊 Web Speech & Audio Harmony:** Synthesizes clear voice instructions and plays harmonic pentatonic bells upon task confirmation.
-* **✉️ Caregiver WhatsApp Bridge:** Instantly shares structured daily care plans with family members using native `wa.me` deep links.
-* **💾 Zero-Backend Persistence:** Runs entirely client-side using browser `localStorage` and `WebAssembly` for maximum speed and privacy.
-
----
-
-## 🛠️ Tech Stack
-
-* **Build Tool:** [Vite](https://vitejs.dev/) (Vanilla JS Template)
-* **Styling & UI:** Tailwind CSS + HTML5 Canvas API (Glassmorphism & Gold Accent Theme)
-* **Multimodal OCR Engine:** Google Gemini 1.5 Flash API (`@google/genai`)
-* **Audio & Speech:** Native Web Audio API (`AudioContext`) + Web Speech API (`speechSynthesis`)
-* **Dispatch Pipeline:** WhatsApp Web Scheme (`https://api.whatsapp.com/send?phone=...`)
-* **Deployment:** Vercel / GitHub Pages
+- **Vite + React 18 + Tailwind CSS** (built via PostCSS). JSX, functional components, and hooks.
+- **HashRouter (`react-router-dom`)** with single-pane mobile (`< 1024px`) and two-pane desktop (`>= 1024px`) responsive layouts.
+- **Self-hosted Typography & Icons:** `@fontsource/nunito-sans` and `material-symbols`.
+- **Framework-free `src/utils/` & `src/services/`:**
+  - `src/utils/storage.js` — `localStorage` models (`cura.profile`, `cura.contacts`, `cura.schedule`, `cura.doseLog`, `cura.explanations`) and `sessionStorage` 300px temporary thumbnail.
+  - `src/utils/dates.js` — Real calendar strip dates and Dawn/Midday/Dusk/Night slot definitions.
+  - `src/utils/schedule.js` — Medical shorthand decoder (`OD`, `BD`, `TDS`, `QID`, `1-0-1`, `HS`, `AC`, `PC`) and `fuse.js` fuzzy matcher against `src/data/medicines.json`.
+  - `src/utils/audio.js` — Web Speech API readout (`en-IN`, `hi-IN`, `mr-IN`) and muteable WebAudio confirmation chime.
+  - `src/services/dispatchService.js` — Provider-based caregiver alert builder (`wa.me` sanitized digit links).
+  - `src/services/ocrService.js` — Client image downscaling (max 1280px JPEG q0.8, 4 MB cap, 30s timeout + 1 retry).
+  - `src/services/explainService.js` — Guarded plain-language medicine explanation client with local caching.
+- **Vercel Serverless Functions (`api/`):**
+  - `api/read-prescription.js` — Calls Gemini Vision in JSON mode using server-side `GEMINI_API_KEY`.
+  - `api/explain-medicine.js` — Calls Gemini in JSON mode with only generic name, strength, form, and language.
 
 ---
 
-## 📁 Repository Structure
+## Environment Variables & Vercel Deployment
 
-```text
-cura/
-├── index.html                  # Main application shell & viewport layout
-├── package.json                # Project scripts & Vite config
-├── vite.config.js              # Environment variable handling
-├── .env.local                  # Local API keys (VITE_GEMINI_API_KEY)
-├── .gitignore                  # Git exclusions (node_modules, dist, .env)
-├── public/
-│   ├── favicon.ico
-│   └── samples/                # Demo fallback prescription images
-│       ├── sample_prescription_1.jpg
-│       └── sample_prescription_2.jpg
-└── src/
-    ├── main.js                 # Application lifecycle & state controller
-    ├── style.css               # Renaissance gold theme & custom CSS
-    ├── config.js               # Preset constants & configuration
-    ├── components/
-    │   ├── camera.js           # Webcam video stream & frame capture
-    │   ├── timeline.js         # Canvas/DOM renderer for daylight cards
-    │   └── settingsModal.js    # Modal for caregiver contacts & API settings
-    ├── services/
-    │   ├── ocrService.js       # Gemini 1.5 Flash vision parser
-    │   ├── dictionary.js       # Medical shorthand & drug name fuzzy-matcher
-    │   └── dispatchService.js  # WhatsApp URL scheme generator & Speech synthesis
-    └── utils/
-        ├── audio.js            # Web Audio API harmonic chime synthesizer
-        └── storage.js          # LocalStorage persistence manager
+Copy `.env.example` to `.env.local` for local development or configure the variables in your Vercel project settings:
+
+```env
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-2.5-flash
+```
+
+- `GEMINI_API_KEY` is read **exclusively** inside `api/read-prescription.js` and `api/explain-medicine.js` and is never bundled into client code.
+
+### Commands
+
+```bash
+npm install
+npm run dev      # Start Vite development server on port 5173
+npm test         # Run unit tests for shorthand decoding, fuzzy matching, dates, and dispatch
+npm run build    # Production build to dist/
+```
+
+---
+
+*A hackathon project. Not medical advice.*

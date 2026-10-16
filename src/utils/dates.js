@@ -1,11 +1,15 @@
-// Date and slot utilities for Cura
+// Date and slot utilities for Cura (single source of truth for dose times)
 
 export const SLOTS = [
-  { id: 'dawn', label: 'Dawn', time: '7:00 AM', hour: 7, icon: 'wb_twilight' },
-  { id: 'midday', label: 'Midday', time: '1:00 PM', hour: 13, icon: 'wb_sunny' },
-  { id: 'dusk', label: 'Dusk', time: '6:00 PM', hour: 18, icon: 'nightlight_round' },
-  { id: 'night', label: 'Night', time: '9:00 PM', hour: 21, icon: 'bedtime' }
+  { id: 'dawn', label: 'Dawn', time: '7:00 AM', time24: '07:00', hour: 7, icon: 'wb_twilight' },
+  { id: 'midday', label: 'Midday', time: '1:00 PM', time24: '13:00', hour: 13, icon: 'wb_sunny' },
+  { id: 'dusk', label: 'Dusk', time: '6:00 PM', time24: '18:00', hour: 18, icon: 'nightlight_round' },
+  { id: 'night', label: 'Night', time: '9:00 PM', time24: '21:00', hour: 21, icon: 'bedtime' }
 ];
+
+export function getSlotById(slotId) {
+  return SLOTS.find(s => s.id === slotId) || SLOTS[0];
+}
 
 export function getTodayDate() {
   return new Date();
@@ -61,9 +65,9 @@ export function getCalendarStrip(currentDate = new Date()) {
 
 /**
  * Determines which time-of-day group is currently due based on current hour
- * Dawn: until 10:00
- * Midday: 10:00 to 15:00
- * Dusk: 15:00 to 19:30
+ * Dawn: until 10:30
+ * Midday: 10:30 to 15:30
+ * Dusk: 15:30 to 19:30
  * Night: after 19:30
  */
 export function getCurrentDueSlot(date = new Date()) {
