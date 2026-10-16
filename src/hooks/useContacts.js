@@ -76,11 +76,29 @@ export function useContacts() {
     setContactsState(next);
   }, []);
 
+  /**
+   * Adds a contact, or updates the existing one when the same number is already
+   * saved. Used by onboarding so re-entering the same WhatsApp number does not
+   * create duplicates or hit the 3-contact limit.
+   */
+  const upsertContact = useCallback(
+    ({ name, relation, phone }) => {
+      const cleanPhone = sanitizePhoneDigits(phone);
+      const existing = getContacts().find(c => c.phone === cleanPhone);
+      if (existing) {
+        return updateContact(existing.id, { name, relation, phone });
+      }
+      return addContact({ name, relation, phone });
+    },
+    [addContact, updateContact]
+  );
+
   return {
     contacts,
     maxReached: contacts.length >= 3,
     addContact,
     updateContact,
-    deleteContact
+    deleteContact,
+    upsertContact
   };
 }

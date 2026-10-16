@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useDoseLog, useSchedule, useToday, useTextSize } from '../hooks/index.js';
-import { SLOTS } from '../utils/dates.js';
+import { getSlotsForProfile } from '../utils/dates.js';
 import TopBar from '../components/TopBar.jsx';
 import BottomNav from '../components/BottomNav.jsx';
 
@@ -10,18 +10,23 @@ export default function HistoryScreen() {
   const { doseLog } = useDoseLog();
   const { getMedicineById } = useSchedule();
   const { headerDate } = useToday();
+  const slots = getSlotsForProfile(profile);
 
   return (
     <div className="bg-background font-body text-body text-on-surface min-h-screen flex flex-col">
       {/* Desktop Header */}
-      <TopBar patientName={profile?.patientName || 'Ramesh'} activeSection="history" />
+      <TopBar
+        patientName={profile?.patientName || 'Ramesh'}
+        role={profile?.role}
+        activeSection="history"
+      />
 
       <div className="flex-1 flex flex-col relative w-full pt-safe lg:pt-24 pb-28">
         <div className="flex flex-col w-full max-w-[540px] mx-auto px-margin">
           <header className="flex items-center justify-between pt-4 pb-2">
             <div>
               <h1 className="font-headline-1 text-headline-1 text-on-surface">Dose History</h1>
-              <p className="font-caption text-caption text-secondary mt-1">{headerDate}</p>
+              <p className="font-caption text-caption text-muted-text mt-1">{headerDate}</p>
             </div>
             <Link
               to="/app"
@@ -35,13 +40,13 @@ export default function HistoryScreen() {
           <main className="mt-6">
             {doseLog.length === 0 ? (
               <div className="bg-surface-container-lowest rounded-3xl border border-card-border p-8 shadow-sm flex flex-col items-center text-center">
-                <div className="w-16 h-16 rounded-2xl bg-surface-container flex items-center justify-center text-secondary mb-4">
+                <div className="w-16 h-16 rounded-2xl bg-surface-container flex items-center justify-center text-muted-text mb-4">
                   <span className="material-symbols-outlined text-[32px]">history</span>
                 </div>
                 <h2 className="font-headline-2 text-headline-2 text-on-surface mb-2">
                   No past history yet
                 </h2>
-                <p className="font-body text-body text-secondary max-w-xs mb-6">
+                <p className="font-body text-body text-muted-text max-w-xs mb-6">
                   When you check off your doses on the Today screen, your completed logs will be
                   recorded here.
                 </p>
@@ -56,7 +61,7 @@ export default function HistoryScreen() {
               <div className="flex flex-col space-y-3">
                 {doseLog.map((entry, idx) => {
                   const med = getMedicineById(entry.medId);
-                  const slotDef = SLOTS.find((s) => s.id === entry.slot);
+                  const slotDef = slots.find((s) => s.id === entry.slot);
                   const takenTime = new Date(entry.takenAt).toLocaleTimeString('en-US', {
                     hour: 'numeric',
                     minute: '2-digit',
@@ -75,12 +80,12 @@ export default function HistoryScreen() {
                           <p className="font-body-semibold text-body-semibold text-on-surface">
                             {med?.name || 'Medicine'} {med?.strength || ''}
                           </p>
-                          <p className="font-caption text-caption text-secondary">
+                          <p className="font-caption text-caption text-muted-text">
                             {slotDef?.label || entry.slot} • {entry.date}
                           </p>
                         </div>
                       </div>
-                      <span className="font-caption text-caption text-secondary bg-surface-container px-2.5 py-1 rounded-full">
+                      <span className="font-caption text-caption text-muted-text bg-surface-container px-2.5 py-1 rounded-full">
                         {takenTime}
                       </span>
                     </div>

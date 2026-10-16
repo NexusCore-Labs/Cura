@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 
 export default function TopBar({
   patientName = 'Ramesh',
+  role = 'patient',
   activeSection = 'today',
   variant = 'desktop',
   title = '',
@@ -80,7 +81,7 @@ export default function TopBar({
               className={`px-3 py-1.5 rounded-xl font-body-semibold text-body-semibold ${
                 activeSection === 'today'
                   ? 'text-primary font-bold bg-surface-container'
-                  : 'text-secondary hover:text-on-surface'
+                  : 'text-muted-text hover:text-on-surface'
               } transition-colors`}
             >
               Today
@@ -90,7 +91,7 @@ export default function TopBar({
               className={`px-3 py-1.5 rounded-xl font-body-semibold text-body-semibold ${
                 activeSection === 'scan'
                   ? 'text-primary font-bold bg-surface-container'
-                  : 'text-secondary hover:text-on-surface'
+                  : 'text-muted-text hover:text-on-surface'
               } transition-colors`}
             >
               Scan Prescription
@@ -100,7 +101,7 @@ export default function TopBar({
               className={`px-3 py-1.5 rounded-xl font-body-semibold text-body-semibold ${
                 activeSection === 'history'
                   ? 'text-primary font-bold bg-surface-container'
-                  : 'text-secondary hover:text-on-surface'
+                  : 'text-muted-text hover:text-on-surface'
               } transition-colors`}
             >
               History
@@ -110,7 +111,7 @@ export default function TopBar({
               className={`px-3 py-1.5 rounded-xl font-body-semibold text-body-semibold ${
                 activeSection === 'contacts'
                   ? 'text-primary font-bold bg-surface-container'
-                  : 'text-secondary hover:text-on-surface'
+                  : 'text-muted-text hover:text-on-surface'
               } transition-colors`}
             >
               Contacts
@@ -120,7 +121,7 @@ export default function TopBar({
               className={`px-3 py-1.5 rounded-xl font-body-semibold text-body-semibold ${
                 activeSection === 'settings'
                   ? 'text-primary font-bold bg-surface-container'
-                  : 'text-secondary hover:text-on-surface'
+                  : 'text-muted-text hover:text-on-surface'
               } transition-colors`}
             >
               Settings
@@ -131,7 +132,7 @@ export default function TopBar({
           <div className="flex items-center gap-space-xs bg-surface-container px-space-sm py-space-xs rounded-full">
             <span className="material-symbols-outlined text-primary text-[20px]">verified_user</span>
             <span className="font-caption-bold text-caption-bold text-on-surface">
-              {patientName} (Patient)
+              {role === 'caretaker' ? `Caring for ${patientName}` : `${patientName} (Patient)`}
             </span>
           </div>
           <Link

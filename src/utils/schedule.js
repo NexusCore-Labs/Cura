@@ -254,8 +254,29 @@ export function searchMedicinesCatalog(query = '') {
 }
 
 /**
+ * Fallback dosage wording when the AI did not read an explicit amount.
+ */
+export function defaultDoseLabel(form = 'tablet') {
+  switch (String(form || '').toLowerCase()) {
+    case 'tablet':
+      return '1 tablet';
+    case 'capsule':
+      return '1 capsule';
+    case 'syrup':
+      return '5 ml';
+    case 'drops':
+      return 'as written';
+    default:
+      return 'as written';
+  }
+}
+
+/**
  * Converts the raw JSON from /api/read-prescription into a Cura schedule object.
  * Applies shorthand decoding, Fuse.js matching, and strict needsReview rules.
+ *
+ * The medicine name and description come from the AI; `dose`, `slots` and `food`
+ * are the fields the user confirms or corrects on the review screen.
  */
 export function buildScheduleFromOcr(ocrData) {
   const rawMeds = Array.isArray(ocrData?.medicines) ? ocrData.medicines : [];
@@ -283,16 +304,25 @@ export function buildScheduleFromOcr(ocrData) {
     else if (foodLabel) notesParts.push(`Take ${foodLabel.toLowerCase()}`);
     if (item.duration) notesParts.push(`for ${item.duration}`);
 
+    const doseRaw = String(item.dose_raw || '').trim();
+
     return {
       id: `med-${Date.now()}-${idx + 1}`,
       name: match.matchedName || 'Unreadable medicine',
       nameRead: item.name_candidates?.[0]?.name || item.raw_text || match.matchedName,
       genericName: match.genericName || match.matchedName,
+      drugClass: match.drugClass || '',
       strength: strength || '',
       form,
+      /** Amount taken each time — the AI suggests it, the user confirms it. */
+      dose: doseRaw || defaultDoseLabel(form),
+      /** True once the AI-proposed dose/timings were reviewed by the user. */
+      doseConfirmed: false,
       slots: decoded.slots.length > 0 ? decoded.slots : ['dawn'],
       food: foodLabel || 'As directed',
       notes: notesParts.join(' • ') || 'Follow your prescription sheet',
+      /** Exactly what the AI saw on the sheet, shown back for verification. */
+      sourceRaw: String(item.raw_text || '').trim(),
       confidence: match.confidence,
       needsReview
     };
@@ -307,10 +337,12 @@ export function buildScheduleFromOcr(ocrData) {
 }
 
 /**
- * Groups schedule medicines into Dawn (07:00), Midday (13:00), Dusk (18:00), and Night (21:00).
+ * Groups schedule medicines into the four daily dose groups.
+ * Pass `slots` (from getSlotsForProfile) to use the patient's own meal-time routine.
  */
-export function groupMedicinesBySlot(medicines = [], dateIso, doseLog = []) {
-  return SLOTS.map(slot => {
+export function groupMedicinesBySlot(medicines = [], dateIso, doseLog = [], slots = SLOTS) {
+  const activeSlots = Array.isArray(slots) && slots.length > 0 ? slots : SLOTS;
+  return activeSlots.map(slot => {
     const medsInSlot = (medicines || []).filter(
       m => Array.isArray(m.slots) && m.slots.includes(slot.id)
     );
@@ -327,4 +359,23 @@ export function groupMedicinesBySlot(medicines = [], dateIso, doseLog = []) {
       isCompleted
     };
   });
+}
+
+/**
+ * Builds the plain-language "how to take it" sentence from the values the user
+ * confirmed on the review screen (never from AI guesses).
+ */
+export function describeDose(med, slots = SLOTS) {
+  if (!med) return '';
+  const parts = [];
+  if (med.dose) parts.push(med.dose);
+  if (med.food) parts.push(String(med.food).toLowerCase());
+  const times = (med.slots || [])
+    .map(id => {
+      const slot = slots.find(s => s.id === id);
+      return slot ? `${slot.label.toLowerCase()} (${slot.time})` : id;
+    })
+    .join(', ');
+  if (times) parts.push(times);
+  return parts.join(', ');
 }

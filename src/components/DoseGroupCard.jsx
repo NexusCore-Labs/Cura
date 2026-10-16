@@ -17,7 +17,7 @@ export default function DoseGroupCard({
         <div className="flex items-center gap-space-xs px-1">
           <span
             className={`material-symbols-outlined text-[22px] ${
-              isCurrentSlot ? 'text-primary' : 'text-secondary'
+              isCurrentSlot ? 'text-primary' : 'text-muted-text'
             }`}
           >
             {group.icon}
@@ -25,12 +25,12 @@ export default function DoseGroupCard({
           <span className="font-body-semibold text-body-semibold text-on-surface">
             {group.label}
           </span>
-          <span className="font-caption text-caption text-secondary ml-auto">{group.time}</span>
+          <span className="font-caption text-caption text-muted-text ml-auto">{group.time}</span>
         </div>
 
         {group.medicines.length === 0 ? (
           <div className="bg-surface-container-low rounded-3xl p-space-md flex items-center border border-card-border/50">
-            <span className="font-body text-body text-secondary">Nothing to take</span>
+            <span className="font-body text-body text-muted-text">Nothing to take</span>
           </div>
         ) : (
           <div className="flex flex-col gap-2">

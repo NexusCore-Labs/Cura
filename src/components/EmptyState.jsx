@@ -14,7 +14,7 @@ export default function EmptyState({
         <span className="material-symbols-outlined text-[40px]">{icon}</span>
       </div>
       <h1 className="font-headline-1 text-headline-1 text-on-surface mb-2">{title}</h1>
-      <p className="font-body text-body text-secondary mb-8">{description}</p>
+      <p className="font-body text-body text-muted-text mb-8">{description}</p>
       {actionLabel && (
         <Link
           to={actionTo}

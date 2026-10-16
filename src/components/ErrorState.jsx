@@ -15,7 +15,7 @@ export default function ErrorState({
         <span className="material-symbols-outlined text-[32px]">error</span>
       </div>
       <h2 className="font-headline-2 text-headline-2 text-on-surface mb-2">{title}</h2>
-      <p className="font-body text-body text-secondary mb-6">{message}</p>
+      <p className="font-body text-body text-muted-text mb-6">{message}</p>
       <div className="flex flex-col gap-3 w-full">
         {onManualEntry && (
           <button

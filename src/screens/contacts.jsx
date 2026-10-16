@@ -49,7 +49,11 @@ export default function ContactsScreen() {
 
   return (
     <div className="bg-background font-body text-body text-on-surface min-h-screen flex flex-col">
-      <TopBar patientName={profile?.patientName || 'Ramesh'} activeSection="contacts" />
+      <TopBar
+        patientName={profile?.patientName || 'Ramesh'}
+        role={profile?.role}
+        activeSection="contacts"
+      />
 
       <div className="flex-1 flex flex-col relative w-full pt-safe lg:pt-24 pb-28">
         <div className="flex flex-col w-full max-w-[540px] mx-auto px-margin">
@@ -58,8 +62,8 @@ export default function ContactsScreen() {
               <h1 className="font-headline-1 text-headline-1 text-on-surface">
                 Caregiver Contacts
               </h1>
-              <p className="font-caption text-caption text-secondary mt-1">
-                People notified when doses are taken (Max 3)
+              <p className="font-caption text-caption text-muted-text mt-1">
+                People reminded about doses on WhatsApp or SMS (max 3)
               </p>
             </div>
             <Link
@@ -85,7 +89,7 @@ export default function ContactsScreen() {
                     <h2 className="font-headline-2 text-[20px] text-on-surface font-semibold truncate">
                       {c.name}
                     </h2>
-                    <p className="font-caption text-caption text-secondary truncate">
+                    <p className="font-caption text-caption text-muted-text truncate">
                       {c.relation} • +{c.phone}
                     </p>
                   </div>
@@ -95,7 +99,7 @@ export default function ContactsScreen() {
                     type="button"
                     onClick={() => openEdit(c)}
                     aria-label={`Edit ${c.name}`}
-                    className="w-11 h-11 rounded-xl flex items-center justify-center text-secondary hover:text-on-surface hover:bg-surface-container transition-colors"
+                    className="w-11 h-11 rounded-xl flex items-center justify-center text-muted-text hover:text-on-surface hover:bg-surface-container transition-colors"
                   >
                     <span className="material-symbols-outlined text-[20px]">edit</span>
                   </button>
@@ -113,7 +117,7 @@ export default function ContactsScreen() {
 
             {maxReached ? (
               <div className="p-4 rounded-2xl bg-surface-container-low border border-card-border/60 text-center">
-                <span className="font-caption text-caption text-secondary">
+                <span className="font-caption text-caption text-muted-text">
                   Contact limit reached (3 of 3). Remove one to add another.
                 </span>
               </div>
@@ -122,7 +126,7 @@ export default function ContactsScreen() {
                 type="button"
                 id="add-contact-btn"
                 onClick={openAdd}
-                className="w-full h-14 rounded-2xl border-2 border-dashed border-card-border hover:border-primary text-secondary hover:text-primary font-body-semibold text-body-semibold flex items-center justify-center gap-2 transition-colors"
+                className="w-full h-14 rounded-2xl border-2 border-dashed border-card-border hover:border-primary text-muted-text hover:text-primary font-body-semibold text-body-semibold flex items-center justify-center gap-2 transition-colors"
               >
                 <span className="material-symbols-outlined text-[22px]">add</span>
                 <span>Add Contact</span>
@@ -147,7 +151,7 @@ export default function ContactsScreen() {
           <div>
             <label
               htmlFor="contact-name"
-              className="block font-caption-bold text-caption-bold text-secondary mb-1"
+              className="block font-caption-bold text-caption-bold text-muted-text mb-1"
             >
               Name
             </label>
@@ -165,7 +169,7 @@ export default function ContactsScreen() {
           <div>
             <label
               htmlFor="contact-relation"
-              className="block font-caption-bold text-caption-bold text-secondary mb-1"
+              className="block font-caption-bold text-caption-bold text-muted-text mb-1"
             >
               Relationship
             </label>
@@ -182,10 +186,13 @@ export default function ContactsScreen() {
           <div>
             <label
               htmlFor="contact-phone"
-              className="block font-caption-bold text-caption-bold text-secondary mb-1"
+              className="block font-caption-bold text-caption-bold text-muted-text mb-1"
             >
-              WhatsApp Number (with country code)
+              Phone number for reminders (with country code)
             </label>
+            <p className="font-caption text-caption text-muted-text mb-1">
+              Used for WhatsApp and SMS dose reminders.
+            </p>
             <input
               id="contact-phone"
               type="tel"

@@ -1,5 +1,5 @@
 // Storage layer for Cura using localStorage and sessionStorage (for temporary 300px Rx thumbnail)
-import { toIsoDate } from './dates.js';
+import { toIsoDate, DEFAULT_MEAL_TIMES } from './dates.js';
 
 export const STORAGE_KEYS = {
   PROFILE: 'cura.profile',
@@ -8,15 +8,59 @@ export const STORAGE_KEYS = {
   DOSE_LOG: 'cura.doseLog',
   EXPLANATIONS: 'cura.explanations',
   SESSION_THUMBNAIL: 'cura.sessionThumbnail',
+  PENDING_SCAN: 'cura.pendingScan',
   PENDING_REVIEW: 'cura.pendingReview'
 };
 
+/** Only English is offered for now. */
+export const SUPPORTED_LANGUAGES = ['en'];
+
 export const DEFAULT_PROFILE = {
+  userName: '',
+  role: 'patient', // patient | caretaker
   patientName: 'Ramesh',
   language: 'en',
   textScale: 'default', // default | large | extra-large
-  muteChime: false
+  muteChime: false,
+  /** The patient's daily routine; dose reminders are scheduled around these times. */
+  mealTimes: { ...DEFAULT_MEAL_TIMES },
+  /** Alert channels used for dose reminders. */
+  whatsappAlerts: true,
+  smsAlerts: true,
+  onboarded: false
 };
+
+/**
+ * Pure helper: keeps a meal-time object to the known keys and "HH:MM" values.
+ */
+export function normalizeMealTimes(mealTimes = {}) {
+  const clean = { ...DEFAULT_MEAL_TIMES };
+  Object.keys(DEFAULT_MEAL_TIMES).forEach(key => {
+    const value = String(mealTimes?.[key] || '').trim();
+    if (/^\d{1,2}:\d{2}$/.test(value)) clean[key] = value;
+  });
+  return clean;
+}
+
+/**
+ * Pure helper: normalises the raw onboarding form into a stored profile.
+ * Kept free of browser APIs so it can be unit-tested.
+ * - A patient's own name becomes the patient name.
+ * - A caretaker keeps their own name plus the patient they look after.
+ */
+export function buildProfileFromOnboarding({ userName, role, patientName, language, mealTimes } = {}) {
+  const cleanUser = String(userName || '').trim();
+  const isCaretaker = role === 'caretaker';
+  const cleanPatient = String(patientName || '').trim();
+  return {
+    userName: cleanUser,
+    role: isCaretaker ? 'caretaker' : 'patient',
+    patientName: isCaretaker ? cleanPatient || cleanUser : cleanUser,
+    language: SUPPORTED_LANGUAGES.includes(language) ? language : 'en',
+    mealTimes: normalizeMealTimes(mealTimes),
+    onboarded: true
+  };
+}
 
 export const DEFAULT_CONTACTS = [
   {
@@ -115,7 +159,12 @@ export function initStorage() {
 }
 
 export function getProfile() {
-  return readKey(STORAGE_KEYS.PROFILE, DEFAULT_PROFILE);
+  const stored = readKey(STORAGE_KEYS.PROFILE, DEFAULT_PROFILE);
+  return {
+    ...DEFAULT_PROFILE,
+    ...stored,
+    mealTimes: normalizeMealTimes(stored?.mealTimes)
+  };
 }
 
 export function saveProfile(profile) {
@@ -178,6 +227,37 @@ export function clearSessionThumbnail() {
   try {
     if (typeof sessionStorage !== 'undefined') {
       sessionStorage.removeItem(STORAGE_KEYS.SESSION_THUMBNAIL);
+    }
+  } catch (_) {}
+}
+
+/**
+ * Holds the scanned prescription (downscaled JPEG or PDF) between the scanner and
+ * the reading screen. Session-scoped only, never persisted to localStorage.
+ */
+export function savePendingScan(payload) {
+  try {
+    if (typeof sessionStorage === 'undefined' || !payload) return;
+    sessionStorage.setItem(STORAGE_KEYS.PENDING_SCAN, JSON.stringify(payload));
+  } catch (_) {
+    // Ignore quota errors
+  }
+}
+
+export function getPendingScan() {
+  try {
+    if (typeof sessionStorage === 'undefined') return null;
+    const raw = sessionStorage.getItem(STORAGE_KEYS.PENDING_SCAN);
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+export function clearPendingScan() {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem(STORAGE_KEYS.PENDING_SCAN);
     }
   } catch (_) {}
 }
@@ -274,6 +354,7 @@ export function clearAllData() {
     localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(DEFAULT_PROFILE));
   }
   clearSessionThumbnail();
+  clearPendingScan();
   notifyStateChange();
 }
 

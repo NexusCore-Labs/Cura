@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { stopSpeech } from './utils/audio.js';
 import { useTextSize } from './hooks/useTextSize.js';
+import { getProfile } from './utils/storage.js';
 
 import LandingDesktopScreen from './screens/landingDesktop.jsx';
 import TodayScreen from './screens/today.jsx';
@@ -14,6 +15,20 @@ import ConfirmedScreen from './screens/confirmed.jsx';
 import HistoryScreen from './screens/history.jsx';
 import SettingsScreen from './screens/settings.jsx';
 import ContactsScreen from './screens/contacts.jsx';
+
+/**
+ * Cura needs the user's details (and the patient's meal routine) before any dose
+ * schedule makes sense, so every app route waits for setup to be finished.
+ */
+function RequireSetup({ children }) {
+  const location = useLocation();
+  const profile = getProfile();
+
+  if (!profile?.onboarded) {
+    return <Navigate to="/" replace state={{ needsSetup: true, from: location.pathname }} />;
+  }
+  return children;
+}
 
 function RouteEffects({ isDesktop }) {
   const location = useLocation();
@@ -69,20 +84,74 @@ export default function App() {
         <Route path="/" element={<LandingDesktopScreen />} />
         <Route
           path="/app"
-          element={isDesktop ? <TwoPaneAppScreen /> : <TodayScreen />}
+          element={
+            <RequireSetup>{isDesktop ? <TwoPaneAppScreen /> : <TodayScreen />}</RequireSetup>
+          }
         />
         <Route
           path="/app/med/:id"
-          element={isDesktop ? <TwoPaneAppScreen /> : <MedicineDetailScreen />}
+          element={
+            <RequireSetup>              {isDesktop ? <TwoPaneAppScreen /> : <MedicineDetailScreen />}
+            </RequireSetup>
+          }
         />
-        <Route path="/scan" element={<CameraScannerScreen />} />
-        <Route path="/reading" element={<ReadingScreen />} />
-        <Route path="/review" element={<ReviewScheduleScreen />} />
-        <Route path="/confirmed" element={<ConfirmedScreen />} />
-        <Route path="/history" element={<HistoryScreen />} />
-        <Route path="/settings" element={<SettingsScreen />} />
-        <Route path="/contacts" element={<ContactsScreen />} />
-        <Route path="*" element={<Navigate to="/app" replace />} />
+        <Route
+          path="/scan"
+          element={
+            <RequireSetup>
+              <CameraScannerScreen />
+            </RequireSetup>
+          }
+        />
+        <Route
+          path="/reading"
+          element={
+            <RequireSetup>
+              <ReadingScreen />
+            </RequireSetup>
+          }
+        />
+        <Route
+          path="/review"
+          element={
+            <RequireSetup>
+              <ReviewScheduleScreen />
+            </RequireSetup>
+          }
+        />
+        <Route
+          path="/confirmed"
+          element={
+            <RequireSetup>
+              <ConfirmedScreen />
+            </RequireSetup>
+          }
+        />
+        <Route
+          path="/history"
+          element={
+            <RequireSetup>
+              <HistoryScreen />
+            </RequireSetup>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <RequireSetup>
+              <SettingsScreen />
+            </RequireSetup>
+          }
+        />
+        <Route
+          path="/contacts"
+          element={
+            <RequireSetup>
+              <ContactsScreen />
+            </RequireSetup>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </HashRouter>
   );

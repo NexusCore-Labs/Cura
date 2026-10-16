@@ -1,10 +1,12 @@
 // Client OCR Service: Image downscaling (max 1280px JPEG q0.8), 300px session thumbnail,
-// 4MB guard, 30s timeout with 1 retry, and sample prescription profiles for test-images/.
+// PDF pass-through, 4MB guard, 30s timeout with 1 retry, and sample fixtures for public/samples.
 import { buildScheduleFromOcr } from '../utils/schedule.js';
 import { saveSessionThumbnail } from '../utils/storage.js';
 
 const MAX_PAYLOAD_BYTES = 4 * 1024 * 1024; // 4 MB
 const REQUEST_TIMEOUT_MS = 30000; // 30 seconds
+
+export const SCAN_ACCEPT = '.jpg,.jpeg,.png,.pdf';
 
 // High-accuracy OCR ground-truth fixtures for the 3 test-images in test-images/
 export const SAMPLE_PRESCRIPTION_FIXTURES = {
@@ -130,6 +132,72 @@ export const SAMPLE_PRESCRIPTION_FIXTURES = {
   }
 };
 
+function estimateBase64Bytes(base64 = '') {
+  return Math.ceil((String(base64).length * 3) / 4);
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Could not read that file. Please try another one.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * True when the picked file is a PDF (by mime type or extension).
+ */
+export function isPdfFile(file) {
+  const name = String(file?.name || '');
+  return file?.type === 'application/pdf' || /\.pdf$/i.test(name);
+}
+
+/**
+ * True when the picked file is a supported image.
+ */
+export function isImageFile(file) {
+  const name = String(file?.name || '');
+  return /^image\//.test(String(file?.type || '')) || /\.(jpe?g|png|webp)$/i.test(name);
+}
+
+/**
+ * Prepares any supported upload (image or PDF) for /api/read-prescription.
+ * Images are downscaled exactly like camera captures; PDFs are passed through
+ * untouched because Gemini reads PDF pages directly.
+ */
+export async function processPrescriptionFile(file) {
+  if (!file) {
+    throw new Error('No file selected.');
+  }
+
+  const fileName = String(file.name || 'prescription');
+
+  if (isPdfFile(file)) {
+    const dataUrl = await readFileAsDataUrl(file);
+    const base64Image = dataUrl.split(',')[1] || '';
+    const byteSize = estimateBase64Bytes(base64Image);
+    if (byteSize > MAX_PAYLOAD_BYTES) {
+      throw new Error('That PDF is larger than 4 MB. Please upload a smaller file.');
+    }
+    return {
+      kind: 'pdf',
+      base64Image,
+      mimeType: 'application/pdf',
+      byteSize,
+      fileName,
+      thumbnailDataUrl: null
+    };
+  }
+
+  if (!isImageFile(file)) {
+    throw new Error('Unsupported file type. Please upload a JPG, JPEG, PNG or PDF.');
+  }
+
+  const processed = await processPrescriptionImage(file);
+  return { kind: 'image', ...processed, fileName };
+}
+
 function loadImageElement(source) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -195,7 +263,7 @@ export async function processPrescriptionImage(source) {
 
   // Check 4 MB limit
   const base64Data = jpegDataUrl.split(',')[1] || '';
-  const byteSize = Math.ceil((base64Data.length * 3) / 4);
+  const byteSize = estimateBase64Bytes(base64Data);
   if (byteSize > MAX_PAYLOAD_BYTES) {
     throw new Error('Image exceeds the 4 MB maximum size limit. Please choose a smaller photo.');
   }
@@ -232,18 +300,25 @@ async function fetchWithTimeout(url, options, timeoutMs = REQUEST_TIMEOUT_MS) {
 }
 
 /**
- * Sends a downscaled prescription image to /api/read-prescription with 30s timeout and 1 retry.
- * Falls back cleanly to sample fixtures when testing the 3 sample images offline.
+ * Sends a prescription (downscaled JPEG or PDF) to /api/read-prescription with a
+ * 30s timeout and one retry. Sample prescriptions resolve straight from the local
+ * fixtures so the demo never depends on a configured API key.
+ *
+ * @param {{ scan?: object }} options - payload prepared by processPrescriptionFile/
+ *   processPrescriptionImage, or `{ kind: 'sample', sampleName }`.
  */
-export async function readPrescription({ imageSource, sampleName = null } = {}) {
-  let processed = null;
-  if (imageSource) {
-    processed = await processPrescriptionImage(imageSource);
-  }
-
-  const matchedFixtureKey = sampleName
-    ? Object.keys(SAMPLE_PRESCRIPTION_FIXTURES).find(k => sampleName.includes(k))
+export async function readPrescription({ scan = null } = {}) {
+  const matchedFixtureKey = scan?.sampleName
+    ? Object.keys(SAMPLE_PRESCRIPTION_FIXTURES).find(k => scan.sampleName.includes(k))
     : null;
+
+  // Demo samples never hit the network.
+  if (scan?.kind === 'sample' || (!scan?.base64Image && matchedFixtureKey)) {
+    const fixture =
+      SAMPLE_PRESCRIPTION_FIXTURES[matchedFixtureKey] ||
+      SAMPLE_PRESCRIPTION_FIXTURES['cura_sample_image1.jpg'];
+    return { ok: true, ocrJson: fixture, schedule: buildScheduleFromOcr(fixture), usedSampleFallback: true };
+  }
 
   let lastError = null;
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -252,9 +327,9 @@ export async function readPrescription({ imageSource, sampleName = null } = {}) 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          imageBase64: processed?.base64Image || '',
-          mimeType: processed?.mimeType || 'image/jpeg',
-          sampleName: matchedFixtureKey || sampleName || null
+          imageBase64: scan?.base64Image || '',
+          mimeType: scan?.mimeType || 'image/jpeg',
+          sampleName: matchedFixtureKey || null
         })
       });
 
@@ -278,16 +353,6 @@ export async function readPrescription({ imageSource, sampleName = null } = {}) 
         break;
       }
     }
-  }
-
-  // If offline or local Vite server without API key and a known sample or default demo capture was used
-  const fallbackFixture =
-    SAMPLE_PRESCRIPTION_FIXTURES[matchedFixtureKey] ||
-    SAMPLE_PRESCRIPTION_FIXTURES['cura_sample_image1.jpg'];
-
-  if (fallbackFixture && (sampleName || !imageSource)) {
-    const schedule = buildScheduleFromOcr(fallbackFixture);
-    return { ok: true, ocrJson: fallbackFixture, schedule, usedSampleFallback: true };
   }
 
   return {

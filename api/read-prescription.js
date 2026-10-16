@@ -1,16 +1,18 @@
 // Vercel Serverless Function: /api/read-prescription
 // Reads GEMINI_API_KEY from server environment only. Never logs request bodies.
 
-const SYSTEM_INSTRUCTION = `You read photographed medical prescriptions (often handwritten) and return ONLY JSON:
+const SYSTEM_INSTRUCTION = `You read photographed or scanned medical prescriptions (often handwritten) and return ONLY JSON:
 {"medicines":[{"raw_text":"","name_candidates":[{"name":"","confidence":0.0}],
 "strength":"","form":"tablet|capsule|syrup|drops|injection|other|unknown",
-"frequency_raw":"","food_raw":"","duration":"","notes":"","legible":true}],
+"dose_raw":"","frequency_raw":"","food_raw":"","duration":"","notes":"","legible":true}],
 "image_quality":"good|poor","warnings":[]}
 Rules: never guess an unreadable word (set legible=false, empty name_candidates). At most 3
 candidates, best first. Copy frequency and food text exactly as written (e.g. "1-0-1","BD",
-"after food"). Do not infer doses or diagnoses. Do NOT output patient or doctor names or
-phone numbers. If it is not a prescription return {"medicines":[],"image_quality":"poor",
-"warnings":["not_a_prescription"]}.`;
+"after food"). Copy the amount per intake exactly as written into dose_raw (e.g. "1 tab",
+"2 capsules", "5 ml", "1 puff"); leave dose_raw empty when the sheet does not state an amount.
+Never calculate, adjust or infer a dose, and do not add any dosing advice. Do not infer
+diagnoses. Do NOT output patient or doctor names or phone numbers. If it is not a prescription
+return {"medicines":[],"image_quality":"poor","warnings":["not_a_prescription"]}.`;
 
 const SAMPLE_FIXTURES = {
   'cura_sample_image1.jpg': {
@@ -147,7 +149,13 @@ export default async function handler(req, res) {
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
-  const model = process.env.GEMINI_MODEL || 'gemini-flash-latest';
+  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+
+  // Gemini reads PDF pages natively; images are sent as JPEG/PNG inline data.
+  const supportedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+  const safeMimeType = supportedMimeTypes.includes(String(mimeType))
+    ? String(mimeType)
+    : 'image/jpeg';
 
   // If no live API key is configured, return the matching sample fixture for local testing
   if (!apiKey || apiKey === 'your_gemini_api_key_here') {
@@ -180,12 +188,15 @@ export default async function handler(req, res) {
             parts: [
               {
                 inlineData: {
-                  mimeType,
+                  mimeType: safeMimeType,
                   data: imageBase64
                 }
               },
               {
-                text: 'Read this prescription and return the structured JSON.'
+                text:
+                  safeMimeType === 'application/pdf'
+                    ? 'Read every page of this prescription PDF and return the structured JSON.'
+                    : 'Read this prescription and return the structured JSON.'
               }
             ]
           }

@@ -25,7 +25,7 @@ export default function BottomNav({ activeRoute = 'today' }) {
               className={`flex flex-col items-center justify-center gap-1 min-w-[48px] min-h-[48px] px-3 py-1.5 transition-colors relative ${
                 isActive
                   ? 'text-on-surface font-caption-bold'
-                  : 'text-secondary hover:text-on-surface font-caption'
+                  : 'text-muted-text hover:text-on-surface font-caption'
               }`}
             >
               <span className="material-symbols-outlined text-[24px]">{item.icon}</span>

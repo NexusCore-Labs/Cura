@@ -1,10 +1,13 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useSchedule, useDoseLog, useToday, useSpeech, useTextSize } from '../hooks/index.js';
-import { groupMedicinesBySlot } from '../utils/schedule.js';
+import { groupMedicinesBySlot, describeDose } from '../utils/schedule.js';
+import { getSlotsForProfile, describeMealRoutine } from '../utils/dates.js';
+import { explainMedicine } from '../services/explainService.js';
 import TopBar from '../components/TopBar.jsx';
 import Timeline from '../components/Timeline.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import DoseProgressRing from '../components/DoseProgressRing.jsx';
 
 export default function TwoPaneAppScreen() {
   const navigate = useNavigate();
@@ -18,6 +21,9 @@ export default function TwoPaneAppScreen() {
 
   const [selectedDateIso, setSelectedDateIso] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
+  const [explanation, setExplanation] = useState(null);
+
+  const slots = useMemo(() => getSlotsForProfile(profile), [profile]);
 
   const activeDateIso = selectedDateIso || todayIso;
   const selectedMedId = params.id || searchParams.get('med') || null;
@@ -37,9 +43,38 @@ export default function TwoPaneAppScreen() {
   }, [medicines, selectedMedId]);
 
   const slotGroups = useMemo(
-    () => groupMedicinesBySlot(medicines, activeDateIso, doseLog),
-    [medicines, activeDateIso, doseLog]
+    () => groupMedicinesBySlot(medicines, activeDateIso, doseLog, slots),
+    [medicines, activeDateIso, doseLog, slots]
   );
+
+  const dosesToday = useMemo(
+    () => doseLog.filter((entry) => entry.date === activeDateIso).length,
+    [doseLog, activeDateIso]
+  );
+
+  // Name and description come from the guarded Gemini explain flow; dosage and
+  // timings always come from what the user confirmed on the review screen.
+  useEffect(() => {
+    let cancelled = false;
+    setExplanation(null);
+    explainMedicine({
+      genericName: activeMed.genericName || activeMed.name,
+      strength: activeMed.strength || '',
+      form: activeMed.form || 'tablet',
+      language: profile?.language || 'en'
+    }).then((res) => {
+      if (!cancelled) setExplanation(res);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeMed.name,
+    activeMed.genericName,
+    activeMed.strength,
+    activeMed.form,
+    profile?.language
+  ]);
 
   const dueGroup = slotGroups.find((g) => g.id === currentSlotId);
   const isDueGroupCompleted =
@@ -59,19 +94,24 @@ export default function TwoPaneAppScreen() {
     navigate(`/confirmed?slot=${currentSlotId}`);
   };
 
-  const doseInstruction =
-    activeMed.notes ||
-    `1 ${activeMed.form || 'tablet'} ${activeMed.food || 'as prescribed'}, from your prescription.`;
+  // Built only from the values the user confirmed: dosage amount, meal timing, slots.
+  const doseInstruction = describeDose(activeMed, slots) || activeMed.notes || 'As confirmed on your reviewed schedule.';
 
   const handleReadAloud = () => {
-    const script = `${activeMed.name} ${activeMed.strength || ''}. ${doseInstruction}. Commonly used to support your health routine as directed by your physician. Confirm with your pharmacist.`;
+    const script = `${activeMed.name} ${activeMed.strength || ''}. How to take it: ${doseInstruction}. ${
+      explanation?.commonly_used_for || ''
+    } Confirm with your pharmacist.`;
     toggleSpeak(script, profile?.language || 'en');
   };
 
   return (
     <div className="bg-background font-body text-body text-on-surface min-h-screen">
       {/* Desktop Header */}
-      <TopBar patientName={profile?.patientName || 'Ramesh'} activeSection="today" />
+      <TopBar
+        patientName={profile?.patientName || 'Ramesh'}
+        role={profile?.role}
+        activeSection="today"
+      />
 
       <main className="w-full pt-24 bg-background">
         <div className="w-full max-w-[1440px] mx-auto px-margin py-space-md">
@@ -84,18 +124,24 @@ export default function TwoPaneAppScreen() {
                 className="w-full lg:w-[420px] lg:flex-shrink-0 flex flex-col gap-space-lg"
                 aria-label="Today medication schedule"
               >
-                {/* Header & Date Subtitle */}
+                {/* Header, progress and routine */}
                 <div className="flex flex-col gap-space-xs">
-                  <span className="font-headline-1 text-headline-1 text-on-surface tracking-tight">
-                    Today
-                  </span>
-                  <span className="font-body text-body text-on-surface-variant">
+                  <span className="font-caption-bold text-caption-bold text-muted-text uppercase tracking-wide">
                     {headerDate}
+                  </span>
+                  <div className="flex items-center justify-between gap-space-sm">
+                    <span className="font-headline-1 text-headline-1 text-on-surface tracking-tight">
+                      Today
+                    </span>
+                    <DoseProgressRing taken={dosesToday} total={medicines.length} />
+                  </div>
+                  <span className="font-caption text-caption text-muted-text">
+                    {describeMealRoutine(profile)}
                   </span>
                 </div>
 
-                {/* 5-Day Horizontal Calendar Strip */}
-                <div className="grid grid-cols-5 gap-space-xs w-full">
+                {/* Full week calendar strip */}
+                <div className="grid grid-cols-7 gap-1.5 w-full">
                   {calendarStrip.map((day) => {
                     const isSelected = activeDateIso
                       ? day.isoDate === activeDateIso
@@ -108,13 +154,15 @@ export default function TwoPaneAppScreen() {
                         aria-pressed={isSelected}
                         className={`flex flex-col items-center justify-center py-3 rounded-2xl transition-colors ${
                           isSelected
-                            ? 'bg-primary-container text-on-lime shadow-sm font-bold'
-                            : 'bg-surface-container-lowest border border-card-border text-on-surface hover:bg-surface-container'
+                            ? 'bg-card-dark text-surface-container-lowest shadow-sm font-bold'
+                            : 'text-on-surface hover:bg-surface-container'
                         }`}
                       >
                         <span
-                          className={`font-caption text-caption ${
-                            isSelected ? 'text-on-lime font-bold' : 'text-secondary'
+                          className={`font-caption text-[12px] tracking-wide ${
+                            isSelected
+                              ? 'text-surface-container-lowest/80'
+                              : 'text-muted-text'
                           }`}
                         >
                           {day.dayName}
@@ -147,7 +195,7 @@ export default function TwoPaneAppScreen() {
                   onClick={handleTakeCurrentSlot}
                   className={`w-full h-14 rounded-2xl ${
                     isDueGroupCompleted
-                      ? 'bg-surface-container text-secondary cursor-not-allowed'
+                      ? 'bg-surface-container text-muted-text cursor-not-allowed'
                       : 'bg-primary-container text-on-lime hover:opacity-95 shadow-sm'
                   } font-body-semibold text-body-semibold flex items-center justify-center gap-space-xs transition-all focus-visible:ring-2 focus-visible:ring-primary`}
                 >
@@ -164,7 +212,7 @@ export default function TwoPaneAppScreen() {
                 {/* Top Utility Bar */}
                 <div className="flex items-center justify-between w-full h-10 px-1">
                   <div className="flex items-center gap-space-xs">
-                    <span className="font-caption-bold text-caption-bold text-secondary uppercase tracking-wider">
+                    <span className="font-caption-bold text-caption-bold text-muted-text uppercase tracking-wider">
                       Medication Profile
                     </span>
                   </div>
@@ -187,22 +235,36 @@ export default function TwoPaneAppScreen() {
                   </div>
                 </div>
 
-                {/* Dark Contrast Header Card */}
-                <div className="w-full bg-card-dark rounded-3xl p-space-lg text-surface-container-lowest shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-space-md">
+                {/* Dark contrast header card with the read-aloud action */}
+                <div className="cura-dark-panel w-full rounded-3xl p-space-lg text-surface-container-lowest shadow-md flex flex-col gap-space-md">
                   <div className="flex flex-col gap-1">
-                    <span className="font-caption text-caption text-surface-variant uppercase tracking-wider">
-                      Prescribed Daily
+                    <span className="font-caption text-caption text-primary-fixed/90 uppercase tracking-wider">
+                      Prescribed daily
                     </span>
                     <h1 className="font-headline-1 text-headline-1 text-surface-container-lowest">
                       {activeMed.name} {activeMed.strength}
                     </h1>
-                    <span className="font-body text-body text-surface-variant">
-                      {activeMed.food || 'Follow prescription guidelines'}
+                    <span className="font-body text-body text-surface-container-lowest/80">
+                      {activeMed.dose ? `${activeMed.dose} · ` : ''}
+                      {activeMed.food || 'As confirmed on your schedule'}
                     </span>
                   </div>
-                  <div className="w-16 h-16 rounded-2xl bg-surface-variant/20 flex items-center justify-center flex-shrink-0 text-primary-container">
-                    <span className="material-symbols-outlined text-[36px]">
-                      medication_liquid
+                  <div className="flex flex-wrap items-center gap-space-xs">
+                    <button
+                      type="button"
+                      id="desktop-read-aloud-btn"
+                      onClick={handleReadAloud}
+                      className="h-12 px-5 rounded-full bg-primary-container text-on-lime font-body-semibold text-[16px] shadow-sm hover:opacity-95 active:scale-[0.99] flex items-center gap-2 transition-all focus-visible:ring-2 focus-visible:ring-primary-fixed"
+                    >
+                      <span className="material-symbols-outlined text-[22px]">
+                        {isSpeaking ? 'pause' : 'volume_up'}
+                      </span>
+                      <span id="desktop-read-text">
+                        {isSpeaking ? 'Reading now...' : 'Read aloud'}
+                      </span>
+                    </button>
+                    <span className="font-caption text-caption text-surface-container-lowest/70">
+                      {describeMealRoutine(profile)}
                     </span>
                   </div>
                 </div>
@@ -216,7 +278,7 @@ export default function TwoPaneAppScreen() {
                     className={`px-space-md py-2 rounded-xl font-body-semibold text-body-semibold transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
                       activeTab === 'overview'
                         ? 'bg-surface-container-lowest text-on-surface shadow-sm'
-                        : 'text-secondary hover:text-on-surface'
+                        : 'text-muted-text hover:text-on-surface'
                     }`}
                   >
                     Overview
@@ -228,7 +290,7 @@ export default function TwoPaneAppScreen() {
                     className={`px-space-md py-2 rounded-xl font-body-semibold text-body-semibold transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
                       activeTab === 'stats'
                         ? 'bg-surface-container-lowest text-on-surface shadow-sm'
-                        : 'text-secondary hover:text-on-surface'
+                        : 'text-muted-text hover:text-on-surface'
                     }`}
                   >
                     Stats
@@ -246,8 +308,8 @@ export default function TwoPaneAppScreen() {
                         </span>
                       </div>
                       <p className="font-body text-body text-on-surface">
-                        Commonly used to support your health routine as directed by your physician.
-                        Your doctor can confirm why it was prescribed for you.
+                        {explanation?.commonly_used_for ||
+                          'Loading AI explanation… Commonly used as directed by your physician.'}
                       </p>
                     </div>
 
@@ -260,8 +322,8 @@ export default function TwoPaneAppScreen() {
                         </span>
                       </div>
                       <p className="font-body text-body text-on-surface">
-                        Prescribed for regular daily adherence according to your doctor&apos;s
-                        clinical instructions.
+                        {explanation?.how_it_helps ||
+                          'Loading AI explanation… Prescribed for regular daily adherence.'}
                       </p>
                     </div>
 
@@ -287,17 +349,21 @@ export default function TwoPaneAppScreen() {
                             Ask your pharmacist if...
                           </span>
                         </div>
-                        <span className="material-symbols-outlined text-secondary transition-transform group-open:rotate-180 text-[24px]">
+                        <span className="material-symbols-outlined text-muted-text transition-transform group-open:rotate-180 text-[24px]">
                           expand_more
                         </span>
                       </summary>
                       <div className="pt-space-sm mt-space-sm bg-surface-container-low rounded-xl p-space-sm flex flex-col gap-space-xs">
                         <p className="font-body text-body text-on-surface">
-                          • Ask your pharmacist what to do if you miss a dose.
+                          •{' '}
+                          {explanation?.ask_pharmacist_if ||
+                            'Ask your pharmacist what to do if you miss a dose, feel unwell, or take other medicines.'}
                         </p>
-                        <p className="font-body text-body text-on-surface">
-                          • Ask your pharmacist if you feel unwell or have questions about timing.
-                        </p>
+                        {explanation?.good_to_know ? (
+                          <p className="font-body text-body text-on-surface">
+                            • {explanation.good_to_know}
+                          </p>
+                        ) : null}
                       </div>
                     </details>
                   </div>
@@ -306,25 +372,26 @@ export default function TwoPaneAppScreen() {
                     id="desktop-stats-panel"
                     className="flex flex-col items-center justify-center py-12 text-center bg-surface-container-lowest border border-card-border rounded-3xl p-6"
                   >
-                    <span className="material-symbols-outlined text-[48px] text-secondary mb-2">
+                    <span className="material-symbols-outlined text-[48px] text-muted-text mb-2">
                       analytics
                     </span>
                     <h3 className="font-headline-2 text-headline-2 text-on-surface mb-1">
                       Adherence History
                     </h3>
-                    <p className="font-body text-body text-secondary">
+                    <p className="font-body text-body text-muted-text">
                       Historical analytics and charts will appear here.
                     </p>
                   </div>
                 )}
 
-                {/* AI Disclaimer Caption */}
-                <div className="flex items-center gap-space-xs px-2">
-                  <span className="material-symbols-outlined text-secondary text-[16px]">
+                {/* Source caption */}
+                <div className="flex items-start gap-space-xs px-2">
+                  <span className="material-symbols-outlined text-muted-text text-[16px] mt-0.5">
                     info
                   </span>
-                  <span className="font-caption text-caption text-secondary">
-                    AI-generated general information. Confirm with your pharmacist.
+                  <span className="font-caption text-caption text-muted-text">
+                    Name and description: AI-generated general information. Dosage and timings: as
+                    you confirmed on the reviewed schedule. Confirm with your pharmacist.
                   </span>
                 </div>
 
@@ -333,23 +400,6 @@ export default function TwoPaneAppScreen() {
                     {speechError}
                   </p>
                 )}
-
-                {/* Primary Lime Read Aloud Button */}
-                <button
-                  type="button"
-                  id="desktop-read-aloud-btn"
-                  onClick={handleReadAloud}
-                  className={`w-full h-14 rounded-2xl ${
-                    isSpeaking ? 'bg-primary-fixed-dim' : 'bg-primary-container'
-                  } text-on-lime font-body-semibold text-body-semibold shadow-sm hover:opacity-95 active:scale-[0.99] flex items-center justify-center gap-space-xs transition-all focus-visible:ring-2 focus-visible:ring-primary`}
-                >
-                  <span className="material-symbols-outlined text-[24px]">
-                    {isSpeaking ? 'pause' : 'volume_up'}
-                  </span>
-                  <span id="desktop-read-text">
-                    {isSpeaking ? 'Reading now...' : 'Read aloud'}
-                  </span>
-                </button>
               </section>
             </div>
           )}

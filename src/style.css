@@ -1,6 +1,7 @@
-@import '@fontsource/nunito-sans/400.css';
-@import '@fontsource/nunito-sans/600.css';
-@import '@fontsource/nunito-sans/700.css';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
 @import 'material-symbols/outlined.css';
 
 @tailwind base;
@@ -12,11 +13,16 @@
     width: 100%;
     margin: 0;
     padding: 0;
-    background-color: #f5fbf2;
-    color: #171d18;
-    font-family: 'Nunito Sans', sans-serif;
+    background-color: #effcf4;
+    color: #061e0f;
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
-  
+
+  html {
+    scroll-behavior: smooth;
+  }
+
   /* Focus rings on every interactive element */
   button:focus-visible,
   a:focus-visible,
@@ -25,10 +31,10 @@
   textarea:focus-visible,
   [tabindex="0"]:focus-visible,
   details:focus-visible {
-    outline: 2px solid #436900 !important;
+    outline: 2px solid #0b8a4b !important;
     outline-offset: 2px !important;
   }
-  
+
   /* Safe area padding utilities */
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -62,5 +68,24 @@
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
     }
+  }
+
+  /* Respect reduced motion for the anchor scrolling added on the landing page */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+}
+
+@layer components {
+  /* Deep green-black gradient panel used for the "prescribed daily" header card */
+  .cura-dark-panel {
+    background-image: linear-gradient(135deg, #071a11 0%, #0d2a1c 55%, #123b26 100%);
+  }
+
+  /* Subtle mint page wash used behind the marketing sections */
+  .cura-mint-wash {
+    background-image: radial-gradient(120% 90% at 15% 0%, #e3fbee 0%, #effcf4 55%, #effcf4 100%);
   }
 }

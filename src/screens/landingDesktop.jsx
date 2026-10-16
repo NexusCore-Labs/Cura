@@ -1,10 +1,51 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useToday, useTextSize } from '../hooks/index.js';
+import { describeMealRoutine, getSlotsForProfile } from '../utils/dates.js';
+import UserInfoDialog from '../components/UserInfoDialog.jsx';
 
 export default function LandingDesktopScreen() {
+  const navigate = useNavigate();
   const { profile } = useTextSize();
   const { headerDate, getGreeting } = useToday();
+
+  // HashRouter owns the URL hash, so in-page jumps are done in script instead of with href="#id".
+  const scrollToSection = (sectionId) => {
+    const target = typeof document !== 'undefined' ? document.getElementById(sectionId) : null;
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const slots = getSlotsForProfile(profile);
+  const morningSlot = slots[0];
+  const nightSlot = slots[3];
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState('edit');
+
+  const isOnboarded = Boolean(profile?.onboarded);
+  const displayName = profile?.patientName || 'Ramesh';
+  const userInitial = (profile?.userName || profile?.patientName || 'C').trim().charAt(0).toUpperCase();
+
+  const openOnboarding = () => {
+    setDialogMode('onboarding');
+    setDialogOpen(true);
+  };
+
+  const openDetails = () => {
+    setDialogMode('edit');
+    setDialogOpen(true);
+  };
+
+  // First-time visitors complete the short form; returning users can pick up where they left off.
+  const handleStart = () => {
+    if (isOnboarded) navigate('/app');
+    else openOnboarding();
+  };
+
+  const handleScan = () => {
+    if (isOnboarded) navigate('/scan');
+    else openOnboarding();
+  };
 
   return (
     <div className="bg-background font-body text-body text-on-surface min-h-screen flex flex-col justify-between selection:bg-primary-container selection:text-on-lime">
@@ -21,40 +62,50 @@ export default function LandingDesktopScreen() {
           </div>
 
           <nav className="hidden md:flex items-center gap-space-xl" aria-label="Landing page sections">
-            <a
-              href="#how-it-works"
-              className="text-secondary hover:text-primary transition-colors font-body-semibold text-body-semibold"
+            <button
+              type="button"
+              onClick={() => scrollToSection('how-it-works')}
+              className="text-muted-text hover:text-primary transition-colors font-body-semibold text-body-semibold"
             >
               How it works
-            </a>
-            <a
-              href="#safety"
-              className="text-secondary hover:text-primary transition-colors font-body-semibold text-body-semibold"
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollToSection('safety')}
+              className="text-muted-text hover:text-primary transition-colors font-body-semibold text-body-semibold"
             >
               Safety
-            </a>
-            <a
-              href="#about"
-              className="text-secondary hover:text-primary transition-colors font-body-semibold text-body-semibold"
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollToSection('about')}
+              className="text-muted-text hover:text-primary transition-colors font-body-semibold text-body-semibold"
             >
               About
-            </a>
+            </button>
           </nav>
 
           <div className="flex items-center gap-space-md">
-            <Link
-              to="/app"
+            <button
+              type="button"
+              onClick={handleScan}
               className="h-12 sm:h-14 px-space-lg rounded-2xl bg-primary-container text-on-lime font-body-semibold text-body-semibold inline-flex items-center justify-center hover:opacity-90 active:scale-[0.99] transition-all shadow-sm focus-visible:ring-2 focus-visible:ring-primary"
             >
-              Try Cura
-            </Link>
-            <Link
-              to="/app"
-              aria-label="Open App Profile"
-              className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-on-primary"
+              {isOnboarded ? 'Scan a prescription' : 'Try Cura'}
+            </button>
+            <button
+              type="button"
+              onClick={openDetails}
+              aria-label="Your details"
+              title="Your details"
+              className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-on-primary font-caption-bold text-caption hover:opacity-90 transition-opacity"
             >
-              <span className="material-symbols-outlined text-[18px]">person</span>
-            </Link>
+              {isOnboarded && profile?.userName ? (
+                userInitial
+              ) : (
+                <span className="material-symbols-outlined text-[18px]">person</span>
+              )}
+            </button>
           </div>
         </div>
       </header>
@@ -79,25 +130,36 @@ export default function LandingDesktopScreen() {
                     Every dose, understood.
                   </h1>
 
-                  <p className="font-body text-body text-secondary text-lg sm:text-xl leading-relaxed mb-8 max-w-xl">
+                  <p className="font-body text-body text-muted-text text-lg sm:text-xl leading-relaxed mb-8 max-w-xl">
                     A calm, senior-friendly medication companion for older adults and their
                     families. Reads photographed prescriptions and keeps daily schedules clear.
                   </p>
 
-                  <div className="w-full sm:w-auto">
-                    <Link
-                      to="/app"
+                  <div className="w-full sm:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
+                    <button
+                      type="button"
+                      onClick={handleStart}
                       className="h-14 px-8 rounded-2xl bg-primary-container text-on-lime font-body-semibold text-body-semibold inline-flex items-center justify-center transition-all hover:opacity-95 shadow-sm w-full sm:w-auto focus-visible:ring-2 focus-visible:ring-primary"
                     >
-                      Get started
-                    </Link>
+                      {isOnboarded ? 'Continue to Cura' : 'Get started'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => scrollToSection('how-it-works')}
+                      className="h-14 px-7 rounded-2xl border-2 border-primary/30 bg-surface-container-lowest text-on-surface font-body-semibold text-body-semibold inline-flex items-center justify-center gap-2 transition-colors hover:bg-surface-container hover:border-primary/60 w-full sm:w-auto focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      See features
+                      <span className="material-symbols-outlined text-[20px]">
+                        keyboard_arrow_down
+                      </span>
+                    </button>
                   </div>
 
                   <div className="flex items-center gap-space-sm mt-8">
                     <span className="material-symbols-outlined text-primary text-[20px]">
                       check_circle
                     </span>
-                    <span className="font-caption text-caption text-secondary">
+                    <span className="font-caption text-caption text-muted-text">
                       Simple to use. No account or password needed.
                     </span>
                   </div>
@@ -121,11 +183,10 @@ export default function LandingDesktopScreen() {
                         </div>
                       </div>
 
-                      {/* Header in Mockup with Real Date */}
-                      <div className="pt-2">
-                        <p className="font-caption text-caption text-secondary">{headerDate}</p>
+                      {/* Header in Mockup with Real Date */}                        <div className="pt-2">
+                          <p className="font-caption text-caption text-muted-text">{headerDate}</p>
                         <h2 className="font-headline-2 text-headline-2 text-on-surface font-semibold">
-                          {getGreeting(profile?.patientName || 'Ramesh')}
+                          {getGreeting(displayName)}
                         </h2>
                       </div>
 
@@ -140,20 +201,20 @@ export default function LandingDesktopScreen() {
                               <h3 className="font-body-semibold text-body-semibold text-on-surface">
                                 Metformin
                               </h3>
-                              <p className="font-caption text-caption text-secondary">
-                                500 mg • Dawn dose
+                              <p className="font-caption text-caption text-muted-text">
+                                500 mg • {morningSlot.label} dose
                               </p>
                             </div>
                           </div>
                           <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-surface-container-low text-on-surface-variant font-caption text-caption">
-                            7:00 AM
+                            {morningSlot.time}
                           </span>
                         </div>
                         <div className="flex items-center gap-2 py-1 px-2.5 rounded-lg bg-surface-container-low">
-                          <span className="material-symbols-outlined text-[18px] text-secondary">
+                          <span className="material-symbols-outlined text-[18px] text-muted-text">
                             restaurant
                           </span>
-                          <span className="font-caption text-caption text-secondary">
+                          <span className="font-caption text-caption text-muted-text">
                             After breakfast
                           </span>
                         </div>
@@ -170,12 +231,12 @@ export default function LandingDesktopScreen() {
                             <h4 className="font-body-semibold text-body-semibold text-on-surface">
                               Amlodipine
                             </h4>
-                            <p className="font-caption text-caption text-secondary">
-                              5 mg • Night dose
+                            <p className="font-caption text-caption text-muted-text">
+                              5 mg • {nightSlot.label} dose
                             </p>
                           </div>
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-surface-container-low text-secondary font-caption text-caption">
-                            9:00 PM
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-surface-container-low text-muted-text font-caption text-caption">
+                            {nightSlot.time}
                           </span>
                         </div>
                       </div>
@@ -189,7 +250,7 @@ export default function LandingDesktopScreen() {
           {/* THREE STEPS SECTION: SNAP, REVIEW, UNDERSTAND */}
           <section
             id="how-it-works"
-            className="w-full py-24 bg-surface-container-low border-y border-card-border/60"
+            className="scroll-mt-24 w-full py-24 bg-surface-container-low border-y border-card-border/60"
           >
             <div className="max-w-[1200px] mx-auto px-margin">
               <div className="max-w-xl mb-16">
@@ -209,13 +270,13 @@ export default function LandingDesktopScreen() {
                       <span className="material-symbols-outlined text-[28px]">photo_camera</span>
                     </div>
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="font-caption-bold text-caption text-secondary">Step 01</span>
+                      <span className="font-caption-bold text-caption text-muted-text">Step 01</span>
                       <span className="w-1.5 h-1.5 rounded-full bg-primary-container" />
                       <h3 className="font-headline-2 text-headline-2 text-on-surface font-bold">
                         Snap
                       </h3>
                     </div>
-                    <p className="font-body text-body text-secondary mt-3">
+                    <p className="font-body text-body text-muted-text mt-3">
                       Capture your prescription paper in bright daylight with one tap. Cura helps
                       frame the page clearly.
                     </p>
@@ -241,15 +302,15 @@ export default function LandingDesktopScreen() {
                       <span className="material-symbols-outlined text-[28px]">fact_check</span>
                     </div>
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="font-caption-bold text-caption text-secondary">Step 02</span>
+                      <span className="font-caption-bold text-caption text-muted-text">Step 02</span>
                       <span className="w-1.5 h-1.5 rounded-full bg-primary-container" />
                       <h3 className="font-headline-2 text-headline-2 text-on-surface font-bold">
                         Review
                       </h3>
                     </div>
-                    <p className="font-body text-body text-secondary mt-3">
-                      Confirm your dosages and schedule clearly before anything is saved. Large text
-                      ensures nothing is missed.
+                    <p className="font-body text-body text-muted-text mt-3">
+                      The AI shows what it read. You change the dosage amount and the timings, then
+                      approve the schedule — nothing is saved without your sign-off.
                     </p>
                   </div>
                   <div className="mt-8 pt-6">
@@ -273,15 +334,15 @@ export default function LandingDesktopScreen() {
                       <span className="material-symbols-outlined text-[28px]">hearing</span>
                     </div>
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="font-caption-bold text-caption text-secondary">Step 03</span>
+                      <span className="font-caption-bold text-caption text-muted-text">Step 03</span>
                       <span className="w-1.5 h-1.5 rounded-full bg-primary-container" />
                       <h3 className="font-headline-2 text-headline-2 text-on-surface font-bold">
                         Understand
                       </h3>
                     </div>
-                    <p className="font-body text-body text-secondary mt-3">
-                      Receive clear, plain-language reminders for every medicine, with high-clarity
-                      voice readout.
+                    <p className="font-body text-body text-muted-text mt-3">
+                      Plain-language explanations, spoken reminders, and WhatsApp or SMS alerts on
+                      the dose times that match your daily routine.
                     </p>
                   </div>
                   <div className="mt-8 pt-6">
@@ -294,6 +355,14 @@ export default function LandingDesktopScreen() {
                           Read aloud
                         </span>
                       </div>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="material-symbols-outlined text-muted-text text-[18px]">
+                        sms
+                      </span>
+                      <span className="font-caption text-caption text-muted-text">
+                        WhatsApp &amp; SMS reminders
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -315,7 +384,7 @@ export default function LandingDesktopScreen() {
                     <h2 className="font-headline-2 text-headline-2 text-on-surface font-bold">
                       Cura organises and explains. It never diagnoses or changes your doses.
                     </h2>
-                    <p className="font-body text-body text-secondary leading-relaxed">
+                    <p className="font-body text-body text-muted-text leading-relaxed">
                       Always consult your doctor or registered pharmacist before starting, stopping,
                       or modifying any medication routine. Cura is an assistive reminder companion
                       designed solely to support adherence.
@@ -327,6 +396,73 @@ export default function LandingDesktopScreen() {
           </section>
         </div>
       </main>
+
+      {/* GET STARTED / YOUR DETAILS SECTION */}
+      <section id="get-started" className="w-full py-20 bg-background">
+        <div className="max-w-[1200px] mx-auto px-margin">
+          <div className="bg-surface-container-lowest rounded-3xl p-8 md:p-12 border border-card-border shadow-sm grid grid-cols-12 gap-gutter items-center">
+            <div className="col-span-12 lg:col-span-7 space-y-3">
+              <span className="font-caption-bold text-caption text-primary tracking-wide uppercase">
+                Get started
+              </span>
+              <h2 className="font-headline-1 text-headline-1 text-on-surface font-bold">
+                Set up in under a minute.
+              </h2>
+              <p className="font-body text-body text-muted-text leading-relaxed max-w-2xl">
+                Tell us your name and whether you take the medicines yourself or look after
+                someone. Family members add a phone number for WhatsApp and SMS reminders, and we
+                ask for the patient&apos;s breakfast, lunch and dinner times so dose reminders follow
+                their real day. Everything stays on this device.
+              </p>
+              <ul className="flex flex-col gap-2 pt-1">
+                {[
+                  { icon: 'badge', text: 'Your name and role (patient or family)' },
+                  { icon: 'chat', text: 'WhatsApp and SMS reminders for family' },
+                  { icon: 'schedule', text: 'Daily meal times so reminders fit the routine' }
+                ].map((item) => (
+                  <li key={item.icon} className="flex items-center gap-space-sm">
+                    <span className="material-symbols-outlined text-primary text-[20px]">
+                      {item.icon}
+                    </span>
+                    <span className="font-body text-[16px] text-muted-text">{item.text}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="col-span-12 lg:col-span-5 flex flex-col items-stretch lg:items-end gap-4 mt-8 lg:mt-0">
+              {isOnboarded ? (
+                <div className="w-full max-w-sm bg-surface-container-low rounded-2xl p-5 border border-card-border/60 space-y-1">
+                  <p className="font-caption text-caption text-muted-text">Saved on this device</p>
+                  <p className="font-headline-2 text-headline-2 text-on-surface">
+                    {profile?.userName || displayName}
+                  </p>
+                  <p className="font-caption text-caption text-muted-text">
+                    {profile?.role === 'caretaker'
+                      ? `Family caretaker for ${displayName}`
+                      : 'Patient'}
+                  </p>
+                  <p className="font-caption text-caption text-muted-text">
+                    {describeMealRoutine(profile)}
+                  </p>
+                </div>
+              ) : null}
+
+              <button
+                type="button"
+                id="your-details-btn"
+                onClick={isOnboarded ? openDetails : openOnboarding}
+                className="h-14 px-8 rounded-2xl bg-primary-container text-on-lime font-body-semibold text-body-semibold inline-flex items-center justify-center gap-2 transition-all hover:opacity-95 shadow-sm w-full max-w-sm focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <span className="material-symbols-outlined text-[22px]">
+                  {isOnboarded ? 'edit' : 'person_add'}
+                </span>
+                {isOnboarded ? 'Edit my details' : 'Add my details'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Footer with Brief-Approved Disclaimer */}
       <footer
@@ -343,15 +479,15 @@ export default function LandingDesktopScreen() {
             </span>
           </div>
           <div className="flex items-center gap-space-lg">
-            <Link to="/app" className="font-caption text-caption text-secondary hover:text-on-surface">
+            <Link to="/app" className="font-caption text-caption text-muted-text hover:text-on-surface">
               Today
             </Link>
-            <Link to="/scan" className="font-caption text-caption text-secondary hover:text-on-surface">
+            <Link to="/scan" className="font-caption text-caption text-muted-text hover:text-on-surface">
               Scan
             </Link>
             <Link
               to="/settings"
-              className="font-caption text-caption text-secondary hover:text-on-surface"
+              className="font-caption text-caption text-muted-text hover:text-on-surface"
             >
               Settings
             </Link>
@@ -361,6 +497,15 @@ export default function LandingDesktopScreen() {
           </p>
         </div>
       </footer>
+
+      <UserInfoDialog
+        isOpen={dialogOpen}
+        mode={dialogMode}
+        onClose={() => setDialogOpen(false)}
+        onSaved={() => {
+          if (dialogMode === 'onboarding') navigate('/scan');
+        }}
+      />
     </div>
   );
 }

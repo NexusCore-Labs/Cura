@@ -1,31 +1,31 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { readPrescription } from '../services/ocrService.js';
-import { saveSchedule } from '../utils/storage.js';
+import { getPendingScan, saveSchedule, clearPendingScan } from '../utils/storage.js';
 import ErrorState from '../components/ErrorState.jsx';
 
 export default function ReadingScreen() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const sampleName = searchParams.get('sample') || null;
   const [errorMessage, setErrorMessage] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
 
     async function processScan() {
+      const scan = getPendingScan();
       const minWait = new Promise((r) => setTimeout(r, 900));
-      const [result] = await Promise.all([
-        readPrescription({ sampleName }),
-        minWait
-      ]);
+      const [result] = await Promise.all([readPrescription({ scan }), minWait]);
 
       if (cancelled) return;
 
       if (result.ok && result.schedule) {
-        if (sampleName) {
-          saveSchedule(result.schedule);
-        }
+        saveSchedule({
+          ...result.schedule,
+          sourceKind: scan?.kind || 'sample',
+          sourceFileName: scan?.fileName || null,
+          aiReadAt: new Date().toISOString()
+        });
+        clearPendingScan();
         navigate('/review', { replace: true });
       } else {
         setErrorMessage(result.error || 'Could not read the prescription automatically.');
@@ -36,7 +36,7 @@ export default function ReadingScreen() {
     return () => {
       cancelled = true;
     };
-  }, [navigate, sampleName]);
+  }, [navigate]);
 
   if (errorMessage) {
     return (
@@ -62,13 +62,16 @@ export default function ReadingScreen() {
       <h1 className="font-headline-1 text-headline-1 text-on-surface mb-3">
         Reading prescription...
       </h1>
-      <p className="font-body text-body text-secondary max-w-xs mb-8">
-        Detecting medications, dosages, and schedules from your scanned sheet.
+      <p className="font-body text-body text-muted-text max-w-xs mb-4">
+        AI is detecting medicine names, dosages and timings from your sheet.
+      </p>
+      <p className="font-caption text-caption text-muted-text max-w-xs mb-8">
+        You will review and correct everything before it is saved.
       </p>
 
       <Link
         to="/scan"
-        className="h-12 px-8 rounded-2xl border border-card-border text-secondary hover:text-on-surface font-body-semibold inline-flex items-center justify-center transition-colors"
+        className="h-12 px-8 rounded-2xl border border-card-border text-muted-text hover:text-on-surface font-body-semibold inline-flex items-center justify-center transition-colors"
       >
         Cancel
       </Link>

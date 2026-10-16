@@ -18,7 +18,7 @@ export default function PrimaryButton({
       onClick={onClick}
       className={`w-full h-14 rounded-2xl ${
         disabled
-          ? 'bg-surface-container text-secondary cursor-not-allowed'
+          ? 'bg-surface-container text-muted-text cursor-not-allowed'
           : active
             ? 'bg-primary-fixed-dim text-on-lime shadow-sm'
             : 'bg-primary-container text-on-lime hover:opacity-95 active:scale-[0.99] shadow-sm'
