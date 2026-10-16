@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_blank" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { colors: { "on-secondary": "#ffffff", "on-tertiary-fixed": "#2a1800", "surface-container": "#e9f0e7", "inverse-primary": "#98d935", "outline": "#727a64", "primary-fixed-dim": "#98d935", "on-primary-container": "#314e00", "on-secondary-fixed": "#191c1a", "on-primary-fixed": "#112000", "inverse-on-surface": "#ecf3ea", "secondary-fixed-dim": "#c4c7c3", "inverse-surface": "#2b322c", "tertiary-container": "#eca640", "surface-container-highest": "#dee4db", "surface-bright": "#f5fbf2", "primary-fixed": "#b2f750", "surface-variant": "#dee4db", "surface-dim": "#d5dcd3", "secondary": "#5b5f5c", "on-surface-variant": "#424936", "on-secondary-fixed-variant": "#444844", "surface-container-low": "#eff6ec", "on-secondary-container": "#5e625e", "on-error": "#ffffff", "tertiary-fixed": "#ffddb5", "tertiary-fixed-dim": "#ffb956", "on-background": "#171d18", "surface-container-high": "#e3eae1", "error-container": "#ffdad6", "secondary-fixed": "#e0e3df", "on-error-container": "#93000a", "on-primary-fixed-variant": "#314f00", "background": "#f5fbf2", "surface": "#f5fbf2", "error": "#ba1a1a", "tertiary": "#835400", "surface-container-lowest": "#ffffff", "on-primary": "#ffffff", "on-tertiary": "#ffffff", "primary": "#436900", "on-surface": "#171d18", "surface-tint": "#436900", "outline-variant": "#c2cab1", "secondary-container": "#dbded9", "on-tertiary-fixed-variant": "#643f00", "primary-container": "#86c61f", "on-tertiary-container": "#623e00" }, borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, spacing: { "space-lg": "24px", "space-sm": "16px", "gutter": "16px", "margin": "24px", "space-md": "20px", "space-xl": "32px", "space-xs": "8px" }, fontFamily: { "headline-2": ["Nunito Sans"], "headline-1": ["Nunito Sans"], "body-semibold": ["Nunito Sans"], "caption": ["Nunito Sans"], "caption-bold": ["Nunito Sans"], "body": ["Nunito Sans"] }, fontSize: { "headline-2": ["22px", { "lineHeight": "30px", "fontWeight": "600" }], "headline-1": ["32px", { "lineHeight": "40px", "fontWeight": "700" }], "body-semibold": ["18px", { "lineHeight": "28px", "fontWeight": "600" }], "caption": ["14px", { "lineHeight": "20px", "fontWeight": "400" }], "caption-bold": ["14px", { "lineHeight": "20px", "fontWeight": "700" }], "body": ["18px", { "lineHeight": "28px", "fontWeight": "400" }] } } } };</script><style>@layer base{html,body{width:100vw;margin:0;padding:0;}body{overscroll-behavior:none;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-surface font-body text-body text-on-surface flex flex-col min-h-screen relative"><main class="flex flex-col relative w-full min-h-screen bg-surface"><div class="flex flex-col w-full relative h-[884px] overflow-hidden select-none">
+<!-- Realistic Rx Document Camera Viewfinder Background -->
+<div class="absolute inset-0 w-full h-full bg-cover bg-center" data-alt="Top-down realistic flat-lay camera viewfinder showing a medical paper prescription sheet centered on a light neutral oak desk surface in soft bright morning natural daylight. Clean typography, blurred Rx text lines, subtle doctor signature, and a hospital clinic logo at top. Minimalist, uncluttered, clinical yet warm photography style." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCp5HghfcNARQ0rREtzEXwu2KULe-SFln6Y4ncQzl2w-8VTBfBeSY2WdTiSmaOENaywDdR5cCzJVLWbxBpHyLLt_orawaIBofIC7llDSSFsCOL3kdi7K1lhXMI-d_zmv4dfIhsUmChmmo8Z7w-V3xiDM6UIjiCc2fER80udialwIdkc9T-EVtk8fTmBSHh0h-rMoUgUbUjFvc5TLFL7Q8GlkTVugltuuWwyOKQJx5wzeFMzHz2UPiI')">
+</div>
+<!-- Camera Dark Scrim / Vignette for Contrast and Focus -->
+<div class="absolute inset-0 bg-inverse-surface/40 pointer-events-none"></div>
+<!-- Top Action Bar -->
+<header class="relative z-10 flex items-center justify-between px-margin pt-space-md">
+<button aria-label="Close Scanner" class="w-12 h-12 rounded-full bg-inverse-surface/60 backdrop-blur-md flex items-center justify-center text-on-secondary active:bg-inverse-surface/90 transition-colors" onclick="window.history.back()" type="button">
+<span class="material-symbols-outlined text-[24px]">close</span>
+</button>
+<div class="w-12 h-12"></div>
+</header>
+<!-- Center Framing Area (Paper Rx Scanner Reticle) -->
+<div class="relative z-10 flex-1 flex flex-col items-center justify-center px-margin my-space-xs">
+<!-- Reticle Frame -->
+<div class="relative w-full max-w-[320px] aspect-[1/1.38] rounded-xl flex items-center justify-center">
+<!-- Top-Left Corner Bracket -->
+<div class="absolute top-0 left-0 w-10 h-10 border-t-[3px] border-l-[3px] border-surface-container-lowest rounded-tl-xl pointer-events-none"></div>
+<!-- Top-Right Corner Bracket -->
+<div class="absolute top-0 right-0 w-10 h-10 border-t-[3px] border-r-[3px] border-surface-container-lowest rounded-tr-xl pointer-events-none"></div>
+<!-- Bottom-Left Corner Bracket -->
+<div class="absolute bottom-0 left-0 w-10 h-10 border-b-[3px] border-l-[3px] border-surface-container-lowest rounded-bl-xl pointer-events-none"></div>
+<!-- Bottom-Right Corner Bracket -->
+<div class="absolute bottom-0 right-0 w-10 h-10 border-b-[3px] border-r-[3px] border-surface-container-lowest rounded-br-xl pointer-events-none"></div>
+<!-- Real-time Scanner Laser Line -->
+<div class="absolute left-3 right-3 h-[2px] bg-primary-fixed opacity-75 shadow-sm transition-all duration-75 pointer-events-none" id="scan-line"></div>
+</div>
+<!-- Guidance Instruction Pill -->
+<div class="mt-space-md bg-inverse-surface/75 backdrop-blur-md px-space-md py-2.5 rounded-full shadow-sm flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-fixed text-[18px]">fit_screen</span>
+<span class="font-body-semibold text-caption-bold text-surface-container-lowest tracking-wide">
+        Lay it flat in bright light
+      </span>
+</div>
+</div>
+<!-- Bottom Camera Controls -->
+<footer class="relative z-10 pb-safe pb-space-lg px-margin flex items-center justify-between">
+<!-- Secondary Upload Button (Left Balanced) -->
+<button aria-label="Upload document from photo library" class="h-14 px-space-md rounded-xl bg-surface-container-lowest/90 backdrop-blur-md text-on-surface flex items-center gap-2 font-body-semibold text-caption-bold active:bg-surface-container-high transition-colors shadow-sm" type="button">
+<span class="material-symbols-outlined text-[20px]">photo_library</span>
+<span>Upload</span>
+</button>
+<!-- Main Shutter Button (Centered) -->
+<div class="flex items-center justify-center pr-10">
+<button aria-label="Capture prescription photo" class="w-[72px] h-[72px] rounded-full p-1 bg-transparent border-2 border-surface-container-lowest flex items-center justify-center active:scale-95 transition-transform duration-100" id="shutter-btn" type="button">
+<div class="w-full h-full rounded-full bg-surface-container-lowest flex items-center justify-center shadow-md">
+<div class="w-14 h-14 rounded-full border border-secondary-container"></div>
+</div>
+</button>
+</div>
+<!-- Invisible spacer for optical alignment -->
+<div class="w-4"></div>
+</footer>
+<!-- Scanning laser movement script & shutter feedback -->
+<script>
+    (function () {
+      const scanLine = document.getElementById('scan-line');
+      let pos = 10;
+      let direction = 1;
+      
+      function animateScanner() {
+        pos += 0.8 * direction;
+        if (pos >= 90) direction = -1;
+        if (pos <= 10) direction = 1;
+        if (scanLine) {
+          scanLine.style.top = pos + '%';
+        }
+        requestAnimationFrame(animateScanner);
+      }
+      requestAnimationFrame(animateScanner);
+
+      const shutterBtn = document.getElementById('shutter-btn');
+      if (shutterBtn) {
+        shutterBtn.addEventListener('click', function () {
+          const flash = document.createElement('div');
+          flash.className = 'absolute inset-0 bg-surface-container-lowest z-50 pointer-events-none transition-opacity duration-300';
+          document.body.appendChild(flash);
+          setTimeout(() => {
+            flash.style.opacity = '0';
+            setTimeout(() => flash.remove(), 300);
+          }, 60);
+        });
+      }
+    })();
+  </script>
+</div></main></body></html>
