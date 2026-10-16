@@ -25,7 +25,7 @@ export default async function handler(req, res) {
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
-  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const model = process.env.GEMINI_MODEL_EXPLAIN || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
   if (!apiKey || apiKey === 'your_gemini_api_key_here') {
     return res.status(200).json({

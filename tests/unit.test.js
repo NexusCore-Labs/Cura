@@ -37,7 +37,8 @@ import {
 import {
   buildProfileFromOnboarding,
   SUPPORTED_LANGUAGES,
-  normalizeMealTimes
+  normalizeMealTimes,
+  DEFAULT_PROFILE
 } from '../src/utils/storage.js';
 
 describe('Shorthand Decoder (src/utils/schedule.js)', () => {
@@ -217,6 +218,10 @@ describe('Onboarding profile builder (src/utils/storage.js)', () => {
     assert.equal(p.patientName, 'Ramesh');
     assert.equal(p.language, 'en');
     assert.equal(p.onboarded, true);
+    // Fresh details make the scan procedure mandatory until it is approved,
+    // while the untouched default profile is not gated.
+    assert.equal(p.scanRequired, true);
+    assert.equal(DEFAULT_PROFILE.scanRequired, false);
   });
 
   it('keeps the caretaker and the patient they look after separate', () => {
@@ -240,6 +245,17 @@ describe('Onboarding profile builder (src/utils/storage.js)', () => {
     assert.equal(p.patientName, 'Neha');
     assert.equal(p.language, 'en');
     assert.deepEqual(SUPPORTED_LANGUAGES, ['en']);
+  });
+
+  it('keeps the scan state when an existing profile is edited', () => {
+    const p = buildProfileFromOnboarding({
+      userName: 'Neha',
+      role: 'caretaker',
+      patientName: 'Ramesh',
+      scanRequired: false
+    });
+    assert.equal(p.onboarded, true);
+    assert.equal(p.scanRequired, false);
   });
 
   it('keeps the daily meal routine and rejects malformed times', () => {

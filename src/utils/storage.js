@@ -27,7 +27,13 @@ export const DEFAULT_PROFILE = {
   /** Alert channels used for dose reminders. */
   whatsappAlerts: true,
   smsAlerts: true,
-  onboarded: false
+  onboarded: false,
+  /**
+   * True between finishing the details form and approving a scanned schedule.
+   * While it is set, every app route sends the user back to #/scan so the
+   * scan -> review -> approve procedure cannot be skipped.
+   */
+  scanRequired: false
 };
 
 /**
@@ -48,7 +54,14 @@ export function normalizeMealTimes(mealTimes = {}) {
  * - A patient's own name becomes the patient name.
  * - A caretaker keeps their own name plus the patient they look after.
  */
-export function buildProfileFromOnboarding({ userName, role, patientName, language, mealTimes } = {}) {
+export function buildProfileFromOnboarding({
+  userName,
+  role,
+  patientName,
+  language,
+  mealTimes,
+  scanRequired
+} = {}) {
   const cleanUser = String(userName || '').trim();
   const isCaretaker = role === 'caretaker';
   const cleanPatient = String(patientName || '').trim();
@@ -58,7 +71,11 @@ export function buildProfileFromOnboarding({ userName, role, patientName, langua
     patientName: isCaretaker ? cleanPatient || cleanUser : cleanUser,
     language: SUPPORTED_LANGUAGES.includes(language) ? language : 'en',
     mealTimes: normalizeMealTimes(mealTimes),
-    onboarded: true
+    onboarded: true,
+    // Fresh details mean the prescription still has to be scanned and approved
+    // before the dose schedule can be used. Callers editing an existing profile
+    // pass its current scanRequired so returning users are not re-gated.
+    scanRequired: scanRequired === undefined ? true : Boolean(scanRequired)
   };
 }
 

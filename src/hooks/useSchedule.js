@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   getSchedule,
   saveSchedule,
+  getProfile,
+  saveProfile,
   getMedicineById,
   getSessionThumbnail,
   clearSessionThumbnail
@@ -90,6 +92,11 @@ export function useSchedule() {
     };
     saveSchedule(updated);
     clearSessionThumbnail();
+    // The user has completed the scan procedure, so the app routes unblock.
+    const profile = getProfile();
+    if (profile.scanRequired) {
+      saveProfile({ ...profile, scanRequired: false });
+    }
     setScheduleState(updated);
     return true;
   }, []);

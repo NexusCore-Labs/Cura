@@ -49,7 +49,9 @@ opens WhatsApp or SMS with a prefilled message to a family contact.
    number for family, and the **daily routine** (breakfast / lunch / dinner times) that schedules the
    reminders. Only English is offered. Everything stays on the device.
 3. Every app route waits for setup: until those details exist, `/app`, `/scan`, `/review`, `/history`,
-   `/settings` and `/contacts` redirect to the landing page (`RequireSetup` in `src/App.jsx`).
+   `/settings` and `/contacts` redirect to the landing page (`RequireSetup` in `src/App.jsx`). Saving
+   the details sends the user straight to `#/scan`, and until the scanned schedule is approved every
+   app route redirects back to `#/scan` — the scan procedure cannot be skipped (`needsScan` gate).
 4. **Scan** — desktop is **upload only** (drag-and-drop or picker; PDF, JPG, JPEG, PNG, 4 MB); mobile
    offers the rear camera, gallery/files (JPG, JPEG, PNG, PDF) and a camera-app fallback. The
    prepared payload is handed to the reading screen through `sessionStorage`.
@@ -69,6 +71,9 @@ Copy `.env.example` to `.env.local` for local development or configure the varia
 
 ```env
 GEMINI_API_KEY=your_gemini_api_key_here
+# Per-endpoint models; GEMINI_MODEL works as a single-model alias.
+GEMINI_MODEL_READ=gemini-2.5-flash
+GEMINI_MODEL_EXPLAIN=gemini-2.5-flash
 GEMINI_MODEL=gemini-2.5-flash
 ```
 

@@ -142,14 +142,15 @@ export default async function handler(req, res) {
   const body = req.body || {};
   const { imageBase64 = '', mimeType = 'image/jpeg', sampleName = null } = body;
 
-  // Reject payloads over 4 MB
+  // Reject payloads over the configured limit (4 MB by default)
+  const maxBytes = Number(process.env.MAX_IMAGE_BYTES) || 4 * 1024 * 1024;
   const estimatedBytes = Math.ceil((String(imageBase64).length * 3) / 4);
-  if (estimatedBytes > 4 * 1024 * 1024) {
+  if (estimatedBytes > maxBytes) {
     return res.status(413).json({ error: 'Payload exceeds 4 MB limit' });
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
-  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const model = process.env.GEMINI_MODEL_READ || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
   // Gemini reads PDF pages natively; images are sent as JPEG/PNG inline data.
   const supportedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
