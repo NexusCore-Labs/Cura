@@ -52,6 +52,17 @@ export default function CameraScannerScreen() {
     goToReading({ kind: 'sample', sampleName });
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.shiftKey && (e.key === 'D' || e.key === 'd')) {
+        e.preventDefault();
+        goToReading({ kind: 'sample', sampleName: 'cura_sample_image1.jpg' });
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  });
+
   return (
     <Camera
       isDesktop={isDesktop}

@@ -38,7 +38,8 @@ export default function ConfirmedScreen() {
 
   const messageBody = buildConfirmationMessage({
     patientName: profile?.patientName || 'Ramesh',
-    slotTime: slotDef.time
+    slotTime: slotDef.time,
+    verifiedTime: timeString
   });
 
   const reminderBody = buildDoseReminderMessage({
@@ -77,6 +78,7 @@ export default function ConfirmedScreen() {
       contact: activeContact,
       patientName: profile?.patientName || 'Ramesh',
       slotTime: slotDef.time,
+      verifiedTime: timeString,
       openWindow: true
     });
 
@@ -137,7 +139,7 @@ export default function ConfirmedScreen() {
             </div>
 
             <div className="bg-surface-container-low rounded-2xl rounded-tr-sm p-space-sm flex flex-col gap-1 border border-card-border/40">
-              <p className="font-body-semibold text-body-semibold text-on-surface">
+              <p className="font-body-semibold text-body-semibold text-on-surface whitespace-pre-line">
                 {messageBody}
               </p>
               <div className="flex items-center justify-end gap-1 text-muted-text">

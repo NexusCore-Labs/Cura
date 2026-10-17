@@ -31,6 +31,11 @@ export default function MedicineCard({
             {medicine.dose ? `${medicine.dose} · ` : ''}
             {medicine.food || 'Prescription dose'}
           </span>
+          {medicine.explanation?.commonly_used_for && (
+            <span className="font-caption text-[12px] text-primary truncate mt-0.5">
+              {medicine.explanation.commonly_used_for}
+            </span>
+          )}
         </div>
         <button
           type="button"
@@ -75,6 +80,11 @@ export default function MedicineCard({
           {medicine.dose ? `${medicine.dose} · ` : ''}
           {medicine.food || 'Prescribed dose'}
         </span>
+        {medicine.explanation?.commonly_used_for && (
+          <span className="font-caption text-[12px] text-primary truncate mt-0.5">
+            {medicine.explanation.commonly_used_for}
+          </span>
+        )}
       </Link>
 
       <button

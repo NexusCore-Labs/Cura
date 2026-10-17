@@ -9,11 +9,13 @@ export default function DoseProgressRing({
   label = 'doses taken',
   className = ''
 }) {
+  const safeTotal = Math.max(0, Number(total) || 0);
+  const safeTaken = Math.min(safeTotal, Math.max(0, Number(taken) || 0));
   const size = 72;
   const stroke = 6;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
-  const ratio = total > 0 ? Math.min(1, Math.max(0, taken / total)) : 0;
+  const ratio = safeTotal > 0 ? Math.min(1, Math.max(0, safeTaken / safeTotal)) : 0;
 
   return (
     <div className={`flex items-center gap-3 ${className}`}>
@@ -22,7 +24,7 @@ export default function DoseProgressRing({
         height={size}
         viewBox={`0 0 ${size} ${size}`}
         role="img"
-        aria-label={`${taken} of ${total} ${label}`}
+        aria-label={`${safeTaken} of ${safeTotal} ${label}`}
         className="flex-shrink-0 -rotate-90"
       >
         <circle
@@ -48,7 +50,7 @@ export default function DoseProgressRing({
       </svg>
       <div className="flex flex-col leading-tight">
         <span className="font-headline-2 text-headline-2 text-on-surface font-bold">
-          {taken}/{total}
+          {safeTaken}/{safeTotal}
         </span>
         <span className="font-caption text-caption text-muted-text">{label}</span>
       </div>

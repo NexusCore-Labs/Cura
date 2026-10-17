@@ -8,6 +8,7 @@ import {
   matchMedicineName,
   buildScheduleFromOcr,
   groupMedicinesBySlot,
+  countDailyDoses,
   defaultDoseLabel,
   describeDose
 } from '../src/utils/schedule.js';
@@ -26,8 +27,11 @@ import {
   isValidInternationalPhone,
   buildConfirmationMessage,
   buildDoseReminderMessage,
+  buildMedicineTakenMessage,
   dispatchToContact,
-  dispatchDoseReminder
+  dispatchDoseReminder,
+  dispatchMedicineTaken,
+  getRegisteredContact
 } from '../src/services/dispatchService.js';
 import {
   SAMPLE_PRESCRIPTION_FIXTURES,
@@ -336,19 +340,27 @@ describe('Dates, Timeline Grouping, and WhatsApp Dispatch Service', () => {
     assert.equal(sanitizePhoneDigits('+91 98765-43210'), '919876543210');
     assert.equal(isValidInternationalPhone('+91 98765-43210'), true);
 
-    const msg = buildConfirmationMessage({ patientName: 'Ramesh', slotTime: '7:00 AM' });
-    assert.equal(msg, 'Ramesh took the 7:00 AM medicines.');
+    const msg = buildConfirmationMessage({
+      patientName: 'Ramesh',
+      slotTime: '7:00 AM',
+      verifiedTime: '7:03 AM'
+    });
+    assert.equal(
+      msg,
+      '💊 *CURA Update*\n• Ramesh took the 7:00 AM dose.\n• Verified at 7:03 AM ✅'
+    );
 
     const res = dispatchToContact({
       contact: { name: 'Neha', phone: '+91 98765-43210' },
       patientName: 'Ramesh',
       slotTime: '7:00 AM',
+      verifiedTime: '7:03 AM',
       openWindow: false
     });
     assert.equal(res.ok, true);
     assert.equal(
       res.url,
-      'https://wa.me/919876543210?text=Ramesh%20took%20the%207%3A00%20AM%20medicines.'
+      `https://api.whatsapp.com/send?phone=919876543210&text=${encodeURIComponent(msg)}`
     );
   });
 
@@ -449,3 +461,64 @@ describe('Uploaded file handling (src/services/ocrService.js)', () => {
     assert.equal(isImageFile({ name: 'notes.txt', type: 'text/plain' }), false);
   });
 });
+
+describe('Daily dose counting and WhatsApp checkbox dispatch', () => {
+  it('counts total scheduled checkboxes across slots and matches taken === total when all boxes are ticked', () => {
+    const medicines = [
+      { id: 'med-1', name: 'Augmentin', strength: '625 mg', slots: ['dawn', 'night'] },
+      { id: 'med-2', name: 'Enzoflam', strength: 'Standard dose', slots: ['dawn', 'night'] },
+      { id: 'med-3', name: 'Pan-D', strength: '40 mg', slots: ['dawn'] },
+      { id: 'med-4', name: 'Hexigel', strength: '1% w/w', slots: ['dawn', 'night'] }
+    ];
+    const dateIso = '2026-10-17';
+
+    // Even with stale/orphaned entries in doseLog from previous schedules, taken never exceeds total (7)
+    const allTickedPlusOrphans = [
+      { date: dateIso, slot: 'dawn', medId: 'med-1' },
+      { date: dateIso, slot: 'night', medId: 'med-1' },
+      { date: dateIso, slot: 'dawn', medId: 'med-2' },
+      { date: dateIso, slot: 'night', medId: 'med-2' },
+      { date: dateIso, slot: 'dawn', medId: 'med-3' },
+      { date: dateIso, slot: 'dawn', medId: 'med-4' },
+      { date: dateIso, slot: 'night', medId: 'med-4' },
+      // Orphaned entries from an older prescription or duplicate clicks:
+      { date: dateIso, slot: 'midday', medId: 'med-old-1' },
+      { date: dateIso, slot: 'night', medId: 'med-old-2' },
+      { date: dateIso, slot: 'dusk', medId: 'med-old-3' },
+      { date: dateIso, slot: 'dawn', medId: 'med-1' }
+    ];
+
+    const groups = groupMedicinesBySlot(medicines, dateIso, allTickedPlusOrphans);
+    const counts = countDailyDoses(groups, dateIso, allTickedPlusOrphans);
+    assert.equal(counts.total, 7);
+    assert.equal(counts.taken, 7);
+    assert.equal(counts.remaining, 0);
+  });
+
+  it('dispatches a WhatsApp wa.me message for a single ticked medicine to the registered contact', () => {
+    const contacts = [{ id: 'c1', name: 'Neha', relation: 'Daughter', phone: '919876543210' }];
+    const reg = getRegisteredContact(contacts, { userName: 'Neha', role: 'caretaker' });
+    assert.equal(reg.phone, '919876543210');
+
+    const msg = buildMedicineTakenMessage({
+      patientName: 'Ramesh',
+      slot: { id: 'dawn', label: 'Morning', time: '7:00 AM' },
+      verifiedTime: '7:03 AM'
+    });
+    assert.equal(
+      msg,
+      '💊 *CURA Update*\n• Ramesh took the 7:00 AM dose.\n• Verified at 7:03 AM ✅'
+    );
+
+    const res = dispatchMedicineTaken({
+      contact: reg,
+      patientName: 'Ramesh',
+      slot: { id: 'dawn', label: 'Morning', time: '7:00 AM' },
+      verifiedTime: '7:03 AM',
+      openWindow: false
+    });
+    assert.equal(res.ok, true);
+    assert.equal(res.url, `https://api.whatsapp.com/send?phone=919876543210&text=${encodeURIComponent(msg)}`);
+  });
+});
+

@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useSchedule, useDoseLog, useToday, useTextSize } from '../hooks/index.js';
-import { groupMedicinesBySlot } from '../utils/schedule.js';
+import { Link, useNavigate } from 'react-router-dom';
+import { useSchedule, useDoseLog, useToday, useTextSize, useContacts } from '../hooks/index.js';
+import { groupMedicinesBySlot, countDailyDoses } from '../utils/schedule.js';
 import { getSlotsForProfile } from '../utils/dates.js';
+import { getRegisteredContact, dispatchMedicineTaken } from '../services/dispatchService.js';
 import BottomNav from '../components/BottomNav.jsx';
 import Timeline from '../components/Timeline.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -12,10 +13,12 @@ export default function TodayScreen() {
   const navigate = useNavigate();
   const { profile } = useTextSize();
   const { medicines } = useSchedule();
+  const { contacts } = useContacts();
   const { doseLog, isDoseTaken, toggleDose, markSlotTaken } = useDoseLog();
   const { todayIso, headerDate, calendarStrip, currentSlotId, getGreeting } = useToday();
 
   const [selectedDateIso, setSelectedDateIso] = useState(null);
+  const [whatsappBanner, setWhatsappBanner] = useState(null);
   const activeDateIso = selectedDateIso || todayIso;
 
   const slots = useMemo(() => getSlotsForProfile(profile), [profile]);
@@ -25,19 +28,58 @@ export default function TodayScreen() {
     [medicines, activeDateIso, doseLog, slots]
   );
 
-  const dosesToday = useMemo(
-    () => doseLog.filter((entry) => entry.date === activeDateIso).length,
-    [doseLog, activeDateIso]
+  const { taken: dosesToday, total: totalDoses, remaining: dosesLeft } = useMemo(
+    () => countDailyDoses(slotGroups, activeDateIso, doseLog),
+    [slotGroups, activeDateIso, doseLog]
   );
-  const totalDoses = medicines.length;
-  const dosesLeft = Math.max(0, totalDoses - dosesToday);
+
+  const registeredContact = useMemo(
+    () => getRegisteredContact(contacts, profile),
+    [contacts, profile]
+  );
 
   const dueGroup = slotGroups.find((g) => g.id === currentSlotId);
   const isDueGroupCompleted =
     !dueGroup || dueGroup.medicines.length === 0 || dueGroup.isCompleted;
 
   const handleToggleDose = (slotId, medId) => {
-    toggleDose(activeDateIso, slotId, medId);
+    const nowTaken = toggleDose(activeDateIso, slotId, medId);
+    if (!nowTaken) {
+      setWhatsappBanner(null);
+      return;
+    }
+
+    if (profile?.whatsappAlerts === false) {
+      return;
+    }
+
+    const medicine = medicines.find((m) => m.id === medId);
+    const slotDef = slots.find((s) => s.id === slotId);
+    const patientName = profile?.patientName || profile?.userName || 'Ramesh';
+
+    if (registeredContact) {
+      const result = dispatchMedicineTaken({
+        contact: registeredContact,
+        patientName,
+        medicine,
+        slot: slotDef || slotId,
+        openWindow: true
+      });
+      if (result.ok) {
+        setWhatsappBanner({
+          type: 'sent',
+          contactName: registeredContact.name || 'Caregiver',
+          phone: registeredContact.phone,
+          medName: `${medicine?.name || 'Medicine'}${medicine?.strength ? ` ${medicine.strength}` : ''}`,
+          url: result.url
+        });
+      }
+    } else {
+      setWhatsappBanner({
+        type: 'missing-contact',
+        medName: `${medicine?.name || 'Medicine'}${medicine?.strength ? ` ${medicine.strength}` : ''}`
+      });
+    }
   };
 
   const handleMarkCurrentSlotTaken = () => {
@@ -78,6 +120,52 @@ export default function TodayScreen() {
             doses left today.
           </p>
         </header>
+
+        {/* WhatsApp dispatch status banner */}
+        {whatsappBanner && (
+          <div
+            role="status"
+            className="mt-4 rounded-2xl border border-primary/30 bg-surface-container-lowest p-3.5 shadow-sm flex items-center justify-between gap-3"
+          >
+            {whatsappBanner.type === 'sent' ? (
+              <>
+                <div className="min-w-0 flex-1">
+                  <p className="font-caption-bold text-caption-bold text-on-surface truncate">
+                    WhatsApp update ready for {whatsappBanner.contactName}
+                  </p>
+                  <p className="font-caption text-[12px] text-muted-text truncate">
+                    Marked {whatsappBanner.medName} as taken (+{whatsappBanner.phone})
+                  </p>
+                </div>
+                <a
+                  href={whatsappBanner.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-9 px-3 rounded-xl bg-primary-container text-on-lime font-caption-bold text-caption-bold flex items-center gap-1 flex-shrink-0"
+                >
+                  <span>Send on WhatsApp</span>
+                </a>
+              </>
+            ) : (
+              <>
+                <div className="min-w-0 flex-1">
+                  <p className="font-caption-bold text-caption-bold text-on-surface">
+                    Add a WhatsApp number for dose alerts
+                  </p>
+                  <p className="font-caption text-[12px] text-muted-text">
+                    Register a caregiver or personal mobile number to send automatic WhatsApp updates.
+                  </p>
+                </div>
+                <Link
+                  to="/contacts"
+                  className="h-9 px-3 rounded-xl bg-primary-container text-on-lime font-caption-bold text-caption-bold flex items-center flex-shrink-0"
+                >
+                  Add number
+                </Link>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Week strip */}
         <section className="mt-6" aria-label="Weekly calendar view">

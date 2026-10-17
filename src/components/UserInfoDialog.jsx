@@ -64,11 +64,10 @@ export default function UserInfoDialog({ isOpen, mode = 'edit', onClose, onSaved
     const saved = profileRef.current || {};
     const savedContacts = contactsRef.current || [];
     const savedIsCaretaker = saved.role === 'caretaker';
-    const savedContact = savedIsCaretaker
-      ? savedContacts.find(
-          (c) => c.name?.toLowerCase() === (saved.userName || '').toLowerCase()
-        ) || (savedContacts.length === 1 ? savedContacts[0] : null)
-      : null;
+    const savedContact =
+      savedContacts.find(
+        (c) => c.name?.toLowerCase() === (saved.userName || '').toLowerCase()
+      ) || savedContacts[0] || null;
 
     setError('');
     setForm({
@@ -145,15 +144,15 @@ export default function UserInfoDialog({ isOpen, mode = 'edit', onClose, onSaved
       return;
     }
 
-    if (isCaretaker) {
-      if (!form.patientName.trim()) {
-        setError("Please enter the patient's name.");
-        return;
-      }
-      if (!isValidInternationalPhone(form.phone)) {
-        setError('Enter a valid WhatsApp number with country code (10–15 digits).');
-        return;
-      }
+    if (isCaretaker && !form.patientName.trim()) {
+      setError("Please enter the patient's name.");
+      return;
+    }
+
+    const trimmedPhone = String(form.phone || '').trim();
+    if ((isCaretaker || trimmedPhone.length > 0) && !isValidInternationalPhone(trimmedPhone)) {
+      setError('Enter a valid WhatsApp number with country code (10–15 digits).');
+      return;
     }
 
     if (MEAL_FIELDS.some((field) => !form.mealTimes[field.key])) {
@@ -161,21 +160,23 @@ export default function UserInfoDialog({ isOpen, mode = 'edit', onClose, onSaved
       return;
     }
 
+    const keepExistingScanState = !isOnboarding && Boolean(profile?.onboarded);
     updateProfile(
       buildProfileFromOnboarding({
         userName: cleanName,
         role: form.role,
         patientName: form.patientName,
         language: 'en',
-        mealTimes: form.mealTimes
+        mealTimes: form.mealTimes,
+        scanRequired: keepExistingScanState ? Boolean(profile?.scanRequired) : true
       })
     );
 
-    if (isCaretaker) {
+    if (isValidInternationalPhone(trimmedPhone)) {
       upsertContact({
         name: cleanName,
-        relation: form.relation,
-        phone: form.phone
+        relation: isCaretaker ? form.relation : 'Caregiver / Self',
+        phone: trimmedPhone
       });
     }
 
@@ -278,68 +279,72 @@ export default function UserInfoDialog({ isOpen, mode = 'edit', onClose, onSaved
             </p>
           </fieldset>
 
-          {isCaretaker && (
-            <div className="flex flex-col gap-4 rounded-2xl bg-surface-container-low border border-card-border/60 p-4">
-              <div>
-                <label
-                  htmlFor="user-info-patient"
-                  className="block font-caption-bold text-caption-bold text-muted-text mb-1"
-                >
-                  Patient&apos;s name
-                </label>
-                <input
-                  id="user-info-patient"
-                  type="text"
-                  value={form.patientName}
-                  onChange={(e) => setField({ patientName: e.target.value })}
-                  placeholder="e.g. Ramesh"
-                  className="w-full h-12 px-4 rounded-xl border border-card-border bg-surface font-body text-body text-on-surface"
-                />
-              </div>
+          <div className="flex flex-col gap-4 rounded-2xl bg-surface-container-low border border-card-border/60 p-4">
+            {isCaretaker && (
+              <>
+                <div>
+                  <label
+                    htmlFor="user-info-patient"
+                    className="block font-caption-bold text-caption-bold text-muted-text mb-1"
+                  >
+                    Patient&apos;s name
+                  </label>
+                  <input
+                    id="user-info-patient"
+                    type="text"
+                    value={form.patientName}
+                    onChange={(e) => setField({ patientName: e.target.value })}
+                    placeholder="e.g. Ramesh"
+                    className="w-full h-12 px-4 rounded-xl border border-card-border bg-surface font-body text-body text-on-surface"
+                  />
+                </div>
 
-              <div>
-                <label
-                  htmlFor="user-info-relation"
-                  className="block font-caption-bold text-caption-bold text-muted-text mb-1"
-                >
-                  You are their
-                </label>
-                <select
-                  id="user-info-relation"
-                  value={form.relation}
-                  onChange={(e) => setField({ relation: e.target.value })}
-                  className="w-full h-12 px-4 rounded-xl border border-card-border bg-surface font-body text-body text-on-surface"
-                >
-                  {RELATION_OPTIONS.map((relation) => (
-                    <option key={relation} value={relation}>
-                      {relation}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                <div>
+                  <label
+                    htmlFor="user-info-relation"
+                    className="block font-caption-bold text-caption-bold text-muted-text mb-1"
+                  >
+                    You are their
+                  </label>
+                  <select
+                    id="user-info-relation"
+                    value={form.relation}
+                    onChange={(e) => setField({ relation: e.target.value })}
+                    className="w-full h-12 px-4 rounded-xl border border-card-border bg-surface font-body text-body text-on-surface"
+                  >
+                    {RELATION_OPTIONS.map((relation) => (
+                      <option key={relation} value={relation}>
+                        {relation}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
 
-              <div>
-                <label
-                  htmlFor="user-info-phone"
-                  className="block font-caption-bold text-caption-bold text-muted-text mb-1"
-                >
-                  WhatsApp number for dose reminders
-                </label>
-                <input
-                  id="user-info-phone"
-                  type="tel"
-                  value={form.phone}
-                  onChange={(e) => setField({ phone: e.target.value })}
-                  placeholder="e.g. 919876543210"
-                  autoComplete="tel"
-                  className="w-full h-12 px-4 rounded-xl border border-card-border bg-surface font-body text-body text-on-surface"
-                />
-                <p className="font-caption text-caption text-muted-text mt-1">
-                  Include the country code. We open WhatsApp and SMS for you — you always tap send.
-                </p>
-              </div>
+            <div>
+              <label
+                htmlFor="user-info-phone"
+                className="block font-caption-bold text-caption-bold text-muted-text mb-1"
+              >
+                {isCaretaker
+                  ? 'WhatsApp number for dose updates'
+                  : 'Caregiver or your WhatsApp number for dose updates'}
+              </label>
+              <input
+                id="user-info-phone"
+                type="tel"
+                value={form.phone}
+                onChange={(e) => setField({ phone: e.target.value })}
+                placeholder="e.g. 919876543210"
+                autoComplete="tel"
+                className="w-full h-12 px-4 rounded-xl border border-card-border bg-surface font-body text-body text-on-surface"
+              />
+              <p className="font-caption text-caption text-muted-text mt-1">
+                Include the country code. When a medicine checkbox is ticked, Cura opens WhatsApp to notify this number.
+              </p>
             </div>
-          )}
+          </div>
 
           <fieldset className="rounded-2xl bg-surface-container-low border border-card-border/60 p-4">
             <legend className="px-1 font-caption-bold text-caption-bold text-muted-text">

@@ -99,7 +99,8 @@ export async function explainMedicine({
   genericName = '',
   strength = '',
   form = 'tablet',
-  language = 'en'
+  language = 'en',
+  preloadedExplanation = null
 } = {}) {
   const cleanGeneric = String(genericName || '').trim();
   const cleanStrength = String(strength || '').trim();
@@ -110,6 +111,28 @@ export async function explainMedicine({
   }
 
   const cacheKey = `${cleanGeneric.toLowerCase()}|${cleanStrength.toLowerCase()}|${cleanLang}`;
+
+  if (
+    preloadedExplanation &&
+    typeof preloadedExplanation === 'object' &&
+    (preloadedExplanation.commonly_used_for || preloadedExplanation.how_it_helps)
+  ) {
+    const validatedPreloaded = validateExplanationPayload({
+      generic_name: preloadedExplanation.generic_name || cleanGeneric,
+      drug_class: preloadedExplanation.drug_class || 'Prescribed medication',
+      commonly_used_for: preloadedExplanation.commonly_used_for || '',
+      how_it_helps: preloadedExplanation.how_it_helps || '',
+      good_to_know: preloadedExplanation.good_to_know || '',
+      ask_pharmacist_if: preloadedExplanation.ask_pharmacist_if || '',
+      confidence: 0.92,
+      unsure: false
+    });
+    if (validatedPreloaded) {
+      saveExplanationCache(cacheKey, validatedPreloaded);
+      return validatedPreloaded;
+    }
+  }
+
   const cached = getExplanationCache(cacheKey);
   if (cached) {
     return cached;

@@ -53,11 +53,17 @@ export function useSchedule() {
       id: newMed.id || `med-${Date.now()}`,
       name: newMed.name || 'Medicine',
       nameRead: newMed.nameRead || newMed.name || 'Medicine',
+      genericName: newMed.genericName || newMed.name || 'Medicine',
       strength: newMed.strength || '',
+      dose: newMed.dose || '1 tablet',
+      doseConfirmed: Boolean(newMed.doseConfirmed),
       form: newMed.form || 'tablet',
       slots: Array.isArray(newMed.slots) && newMed.slots.length > 0 ? newMed.slots : ['dawn'],
       food: newMed.food || 'After meal',
       notes: newMed.notes || 'Follow prescription instructions',
+      sourceRaw: newMed.sourceRaw || '',
+      confidence: typeof newMed.confidence === 'number' ? newMed.confidence : 1,
+      explanation: newMed.explanation || null,
       needsReview: Boolean(newMed.needsReview)
     };
     const updated = {

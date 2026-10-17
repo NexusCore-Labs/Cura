@@ -1,5 +1,5 @@
 // Storage layer for Cura using localStorage and sessionStorage (for temporary 300px Rx thumbnail)
-import { toIsoDate, DEFAULT_MEAL_TIMES } from './dates.js';
+import { DEFAULT_MEAL_TIMES } from './dates.js';
 
 export const STORAGE_KEYS = {
   PROFILE: 'cura.profile',
@@ -41,7 +41,7 @@ export const DEFAULT_PROFILE = {
  */
 export function normalizeMealTimes(mealTimes = {}) {
   const clean = { ...DEFAULT_MEAL_TIMES };
-  Object.keys(DEFAULT_MEAL_TIMES).forEach(key => {
+  Object.keys(DEFAULT_MEAL_TIMES).forEach((key) => {
     const value = String(mealTimes?.[key] || '').trim();
     if (/^\d{1,2}:\d{2}$/.test(value)) clean[key] = value;
   });
@@ -88,45 +88,26 @@ export const DEFAULT_CONTACTS = [
   }
 ];
 
+/**
+ * Empty initial schedule — actual medicines are populated when a prescription
+ * is uploaded and extracted by Gemini (or added manually by the user).
+ */
 export const DEFAULT_SCHEDULE = {
-  approvedAt: new Date().toISOString(),
-  thumbnail: '/samples/cura_sample_image1.jpg',
-  medicines: [
-    {
-      id: 'med-1',
-      name: 'Metformin',
-      nameRead: 'Metformin',
-      strength: '500 mg',
-      form: 'tablet',
-      slots: ['dawn'],
-      food: 'After breakfast',
-      notes: 'Take with breakfast',
-      needsReview: false
-    },
-    {
-      id: 'med-2',
-      name: 'Vitamin B12',
-      nameRead: 'Vit B12',
-      strength: '1500 mcg',
-      form: 'capsule',
-      slots: ['midday'],
-      food: 'After lunch',
-      notes: 'Take after lunch',
-      needsReview: false
-    },
-    {
-      id: 'med-3',
-      name: 'Amlodipine',
-      nameRead: 'Amlodipine',
-      strength: '5 mg',
-      form: 'tablet',
-      slots: ['night'],
-      food: 'After dinner',
-      notes: 'Take after dinner',
-      needsReview: true
-    }
-  ]
+  approvedAt: null,
+  thumbnail: null,
+  medicines: []
 };
+
+/**
+ * Detects the legacy static mock schedule (Metformin / Vitamin B12 / Amlodipine)
+ * that was previously seeded into localStorage before Gemini extraction was wired.
+ */
+function isLegacyMockSchedule(sched) {
+  if (!sched || !Array.isArray(sched.medicines)) return false;
+  if (sched.aiReadAt || sched.userModified) return false;
+  const ids = sched.medicines.map((m) => m.id).join(',');
+  return ids === 'med-1,med-2,med-3' && sched.medicines[0]?.name === 'Metformin';
+}
 
 function notifyStateChange() {
   if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
@@ -164,7 +145,8 @@ export function initStorage() {
   if (!localStorage.getItem(STORAGE_KEYS.CONTACTS)) {
     writeKey(STORAGE_KEYS.CONTACTS, DEFAULT_CONTACTS);
   }
-  if (!localStorage.getItem(STORAGE_KEYS.SCHEDULE)) {
+  const existingSchedule = readKey(STORAGE_KEYS.SCHEDULE, null);
+  if (!existingSchedule || isLegacyMockSchedule(existingSchedule)) {
     writeKey(STORAGE_KEYS.SCHEDULE, DEFAULT_SCHEDULE);
   }
   if (!localStorage.getItem(STORAGE_KEYS.DOSE_LOG)) {
@@ -202,7 +184,12 @@ export function saveContacts(contacts) {
 }
 
 export function getSchedule() {
-  return readKey(STORAGE_KEYS.SCHEDULE, DEFAULT_SCHEDULE);
+  const sched = readKey(STORAGE_KEYS.SCHEDULE, DEFAULT_SCHEDULE);
+  if (isLegacyMockSchedule(sched)) {
+    writeKey(STORAGE_KEYS.SCHEDULE, DEFAULT_SCHEDULE);
+    return DEFAULT_SCHEDULE;
+  }
+  return sched;
 }
 
 export function saveSchedule(schedule) {
@@ -216,6 +203,65 @@ export function saveSchedule(schedule) {
     saveSessionThumbnail(copy.thumbnail);
     delete copy.thumbnail;
   }
+
+  // Prune any orphaned doseLog entries whose (medId, slot) no longer belong to the active schedule
+  if (Array.isArray(copy.medicines) && typeof localStorage !== 'undefined') {
+    const validPairs = new Set();
+    for (const med of copy.medicines) {
+      for (const slotId of med?.slots || []) {
+        validPairs.add(`${med.id}::${slotId}`);
+      }
+    }
+    const currentLog = readKey(STORAGE_KEYS.DOSE_LOG, []);
+    if (Array.isArray(currentLog) && currentLog.length > 0) {
+      const seen = new Set();
+      const cleanedLog = currentLog.filter((entry) => {
+        if (!entry || !validPairs.has(`${entry.medId}::${entry.slot}`)) return false;
+        const uniqueKey = `${entry.date}::${entry.slot}::${entry.medId}`;
+        if (seen.has(uniqueKey)) return false;
+        seen.add(uniqueKey);
+        return true;
+      });
+      if (cleanedLog.length !== currentLog.length) {
+        try {
+          localStorage.setItem(STORAGE_KEYS.DOSE_LOG, JSON.stringify(cleanedLog));
+        } catch (_) {}
+      }
+    }
+  }
+
+  // Also cache any Gemini-extracted explanations carried on the medicines
+  if (Array.isArray(copy.medicines)) {
+    const allExplanations = readKey(STORAGE_KEYS.EXPLANATIONS, {});
+    let updatedExplanations = false;
+    for (const med of copy.medicines) {
+      if (med?.explanation && (med.explanation.commonly_used_for || med.explanation.how_it_helps)) {
+        const genericKey = String(med.genericName || med.name || '')
+          .trim()
+          .toLowerCase();
+        const nameKey = String(med.name || '')
+          .trim()
+          .toLowerCase();
+        const strengthKey = String(med.strength || '')
+          .trim()
+          .toLowerCase();
+        if (genericKey) {
+          allExplanations[`${genericKey}|${strengthKey}|en`] = med.explanation;
+          updatedExplanations = true;
+        }
+        if (nameKey && nameKey !== genericKey) {
+          allExplanations[`${nameKey}|${strengthKey}|en`] = med.explanation;
+          updatedExplanations = true;
+        }
+      }
+    }
+    if (updatedExplanations && typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem(STORAGE_KEYS.EXPLANATIONS, JSON.stringify(allExplanations));
+      } catch (_) {}
+    }
+  }
+
   writeKey(STORAGE_KEYS.SCHEDULE, copy);
 }
 
@@ -237,7 +283,7 @@ export function getSessionThumbnail() {
     }
   } catch (_) {}
   const sched = getSchedule();
-  return sched?.thumbnail || '/samples/cura_sample_image1.jpg';
+  return sched?.thumbnail || null;
 }
 
 export function clearSessionThumbnail() {
@@ -290,32 +336,33 @@ export function saveDoseLog(log) {
 export function isDoseTaken(dateIso, slotId, medId) {
   const log = getDoseLog();
   return log.some(
-    entry => entry.date === dateIso && entry.slot === slotId && entry.medId === medId
+    (entry) => entry.date === dateIso && entry.slot === slotId && entry.medId === medId
   );
 }
 
 export function isSlotTaken(dateIso, slotId, medicinesInSlot) {
   if (!medicinesInSlot || medicinesInSlot.length === 0) return true;
-  return medicinesInSlot.every(med => isDoseTaken(dateIso, slotId, med.id));
+  return medicinesInSlot.every((med) => isDoseTaken(dateIso, slotId, med.id));
 }
 
 export function toggleDose(dateIso, slotId, medId) {
   const log = getDoseLog();
-  const existingIdx = log.findIndex(
-    entry => entry.date === dateIso && entry.slot === slotId && entry.medId === medId
+  const alreadyTaken = log.some(
+    (entry) => entry.date === dateIso && entry.slot === slotId && entry.medId === medId
   );
-  if (existingIdx >= 0) {
-    log.splice(existingIdx, 1);
-  } else {
-    log.push({
+  const filtered = log.filter(
+    (entry) => !(entry.date === dateIso && entry.slot === slotId && entry.medId === medId)
+  );
+  if (!alreadyTaken) {
+    filtered.push({
       date: dateIso,
       slot: slotId,
       medId: medId,
       takenAt: new Date().toISOString()
     });
   }
-  writeKey(STORAGE_KEYS.DOSE_LOG, log);
-  return existingIdx < 0;
+  writeKey(STORAGE_KEYS.DOSE_LOG, filtered);
+  return !alreadyTaken;
 }
 
 export function markSlotTaken(dateIso, slotId, medicinesInSlot) {
@@ -323,9 +370,9 @@ export function markSlotTaken(dateIso, slotId, medicinesInSlot) {
   const now = new Date().toISOString();
   let markedCount = 0;
 
-  (medicinesInSlot || []).forEach(med => {
+  (medicinesInSlot || []).forEach((med) => {
     const exists = log.some(
-      entry => entry.date === dateIso && entry.slot === slotId && entry.medId === med.id
+      (entry) => entry.date === dateIso && entry.slot === slotId && entry.medId === med.id
     );
     if (!exists) {
       log.push({
@@ -345,7 +392,7 @@ export function markSlotTaken(dateIso, slotId, medicinesInSlot) {
 export function getMedicineById(medId) {
   const schedule = getSchedule();
   if (!schedule || !schedule.medicines) return null;
-  return schedule.medicines.find(m => m.id === medId) || null;
+  return schedule.medicines.find((m) => m.id === medId) || null;
 }
 
 export function getExplanationCache(cacheKey) {

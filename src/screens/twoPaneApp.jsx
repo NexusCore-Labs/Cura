@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useSchedule, useDoseLog, useToday, useSpeech, useTextSize } from '../hooks/index.js';
-import { groupMedicinesBySlot, describeDose } from '../utils/schedule.js';
+import { useSchedule, useDoseLog, useToday, useSpeech, useTextSize, useContacts } from '../hooks/index.js';
+import { groupMedicinesBySlot, describeDose, countDailyDoses } from '../utils/schedule.js';
 import { getSlotsForProfile, describeMealRoutine } from '../utils/dates.js';
 import { explainMedicine } from '../services/explainService.js';
+import { getRegisteredContact, dispatchMedicineTaken } from '../services/dispatchService.js';
 import TopBar from '../components/TopBar.jsx';
 import Timeline from '../components/Timeline.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -15,6 +16,7 @@ export default function TwoPaneAppScreen() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { profile } = useTextSize();
   const { medicines } = useSchedule();
+  const { contacts } = useContacts();
   const { doseLog, isDoseTaken, toggleDose, markSlotTaken } = useDoseLog();
   const { todayIso, headerDate, calendarStrip, currentSlotId } = useToday();
   const { isSpeaking, speechError, toggleSpeak } = useSpeech();
@@ -22,6 +24,7 @@ export default function TwoPaneAppScreen() {
   const [selectedDateIso, setSelectedDateIso] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [explanation, setExplanation] = useState(null);
+  const [whatsappBanner, setWhatsappBanner] = useState(null);
 
   const slots = useMemo(() => getSlotsForProfile(profile), [profile]);
 
@@ -32,12 +35,12 @@ export default function TwoPaneAppScreen() {
     return (
       medicines.find((m) => m.id === selectedMedId) ||
       medicines[0] || {
-        id: 'med-3',
-        name: 'Amlodipine',
-        strength: '5 mg',
+        id: 'med-empty',
+        name: 'No medicine selected',
+        strength: '',
         form: 'tablet',
-        food: 'After dinner',
-        notes: '1 tablet after dinner, from your prescription.'
+        food: '',
+        notes: ''
       }
     );
   }, [medicines, selectedMedId]);
@@ -47,21 +50,28 @@ export default function TwoPaneAppScreen() {
     [medicines, activeDateIso, doseLog, slots]
   );
 
-  const dosesToday = useMemo(
-    () => doseLog.filter((entry) => entry.date === activeDateIso).length,
-    [doseLog, activeDateIso]
+  const { taken: dosesToday, total: totalDoses, remaining: dosesLeft } = useMemo(
+    () => countDailyDoses(slotGroups, activeDateIso, doseLog),
+    [slotGroups, activeDateIso, doseLog]
+  );
+
+  const registeredContact = useMemo(
+    () => getRegisteredContact(contacts, profile),
+    [contacts, profile]
   );
 
   // Name and description come from the guarded Gemini explain flow; dosage and
   // timings always come from what the user confirmed on the review screen.
   useEffect(() => {
+    if (!activeMed || activeMed.id === 'med-empty') return undefined;
     let cancelled = false;
-    setExplanation(null);
+    setExplanation(activeMed.explanation || null);
     explainMedicine({
       genericName: activeMed.genericName || activeMed.name,
       strength: activeMed.strength || '',
       form: activeMed.form || 'tablet',
-      language: profile?.language || 'en'
+      language: profile?.language || 'en',
+      preloadedExplanation: activeMed.explanation || null
     }).then((res) => {
       if (!cancelled) setExplanation(res);
     });
@@ -69,10 +79,12 @@ export default function TwoPaneAppScreen() {
       cancelled = true;
     };
   }, [
+    activeMed.id,
     activeMed.name,
     activeMed.genericName,
     activeMed.strength,
     activeMed.form,
+    activeMed.explanation,
     profile?.language
   ]);
 
@@ -85,7 +97,43 @@ export default function TwoPaneAppScreen() {
   };
 
   const handleToggleDose = (slotId, medId) => {
-    toggleDose(activeDateIso, slotId, medId);
+    const nowTaken = toggleDose(activeDateIso, slotId, medId);
+    if (!nowTaken) {
+      setWhatsappBanner(null);
+      return;
+    }
+
+    if (profile?.whatsappAlerts === false) {
+      return;
+    }
+
+    const medicine = medicines.find((m) => m.id === medId);
+    const slotDef = slots.find((s) => s.id === slotId);
+    const patientName = profile?.patientName || profile?.userName || 'Ramesh';
+
+    if (registeredContact) {
+      const result = dispatchMedicineTaken({
+        contact: registeredContact,
+        patientName,
+        medicine,
+        slot: slotDef || slotId,
+        openWindow: true
+      });
+      if (result.ok) {
+        setWhatsappBanner({
+          type: 'sent',
+          contactName: registeredContact.name || 'Caregiver',
+          phone: registeredContact.phone,
+          medName: `${medicine?.name || 'Medicine'}${medicine?.strength ? ` ${medicine.strength}` : ''}`,
+          url: result.url
+        });
+      }
+    } else {
+      setWhatsappBanner({
+        type: 'missing-contact',
+        medName: `${medicine?.name || 'Medicine'}${medicine?.strength ? ` ${medicine.strength}` : ''}`
+      });
+    }
   };
 
   const handleTakeCurrentSlot = () => {
@@ -133,12 +181,59 @@ export default function TwoPaneAppScreen() {
                     <span className="font-headline-1 text-headline-1 text-on-surface tracking-tight">
                       Today
                     </span>
-                    <DoseProgressRing taken={dosesToday} total={medicines.length} />
+                    <DoseProgressRing taken={dosesToday} total={totalDoses} />
                   </div>
                   <span className="font-caption text-caption text-muted-text">
+                    <strong className="text-primary">{dosesLeft}</strong> of {totalDoses} doses left today ·{' '}
                     {describeMealRoutine(profile)}
                   </span>
                 </div>
+
+                {/* WhatsApp dispatch status banner */}
+                {whatsappBanner && (
+                  <div
+                    role="status"
+                    className="rounded-2xl border border-primary/30 bg-surface-container-lowest p-3.5 shadow-sm flex items-center justify-between gap-3"
+                  >
+                    {whatsappBanner.type === 'sent' ? (
+                      <>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-caption-bold text-caption-bold text-on-surface truncate">
+                            WhatsApp update ready for {whatsappBanner.contactName}
+                          </p>
+                          <p className="font-caption text-[12px] text-muted-text truncate">
+                            Marked {whatsappBanner.medName} as taken (+{whatsappBanner.phone})
+                          </p>
+                        </div>
+                        <a
+                          href={whatsappBanner.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="h-9 px-3 rounded-xl bg-primary-container text-on-lime font-caption-bold text-caption-bold flex items-center gap-1 flex-shrink-0"
+                        >
+                          <span>Send on WhatsApp</span>
+                        </a>
+                      </>
+                    ) : (
+                      <>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-caption-bold text-caption-bold text-on-surface">
+                            Add a WhatsApp number for dose alerts
+                          </p>
+                          <p className="font-caption text-[12px] text-muted-text">
+                            Register a caregiver or personal mobile number to send automatic WhatsApp updates.
+                          </p>
+                        </div>
+                        <Link
+                          to="/contacts"
+                          className="h-9 px-3 rounded-xl bg-primary-container text-on-lime font-caption-bold text-caption-bold flex items-center flex-shrink-0"
+                        >
+                          Add number
+                        </Link>
+                      </>
+                    )}
+                  </div>
+                )}
 
                 {/* Full week calendar strip */}
                 <div className="grid grid-cols-7 gap-1.5 w-full">

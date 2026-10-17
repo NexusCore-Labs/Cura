@@ -217,6 +217,11 @@ export default function ReviewScheduleScreen() {
                     <p className="font-caption text-caption text-muted-text mt-0.5">
                       {med.dose || 'as written'} · {med.food || 'As directed'}
                     </p>
+                    {med.explanation?.commonly_used_for && (
+                      <p className="font-caption text-[13px] text-primary mt-1">
+                        {med.explanation.commonly_used_for}
+                      </p>
+                    )}
                   </div>
                   {hasReviewIssue ? (
                     <div className="flex items-center space-x-1 text-warning-amber font-caption-bold text-caption-bold flex-shrink-0">

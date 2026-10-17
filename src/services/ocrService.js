@@ -299,21 +299,50 @@ async function fetchWithTimeout(url, options, timeoutMs = REQUEST_TIMEOUT_MS) {
   }
 }
 
+async function loadSampleScanPayload(sampleName) {
+  if (typeof window === 'undefined' || !sampleName) return null;
+  try {
+    const cleanFile = sampleName.replace(/^.*\/samples\//, '');
+    const res = await fetch(`/samples/${cleanFile}`);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    const processed = await processPrescriptionImage(blob);
+    return {
+      kind: 'image',
+      ...processed,
+      fileName: cleanFile,
+      sampleName: cleanFile
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
 /**
  * Sends a prescription (downscaled JPEG or PDF) to /api/read-prescription with a
- * 30s timeout and one retry. Sample prescriptions resolve straight from the local
- * fixtures so the demo never depends on a configured API key.
+ * 30s timeout and one retry. Sample prescriptions are also sent through the live
+ * Gemini Vision API when running in the browser, with a safe local fallback.
  *
  * @param {{ scan?: object }} options - payload prepared by processPrescriptionFile/
  *   processPrescriptionImage, or `{ kind: 'sample', sampleName }`.
  */
 export async function readPrescription({ scan = null } = {}) {
+  let effectiveScan = scan;
   const matchedFixtureKey = scan?.sampleName
     ? Object.keys(SAMPLE_PRESCRIPTION_FIXTURES).find(k => scan.sampleName.includes(k))
-    : null;
+    : scan?.fileName
+      ? Object.keys(SAMPLE_PRESCRIPTION_FIXTURES).find(k => scan.fileName.includes(k))
+      : null;
 
-  // Demo samples never hit the network.
-  if (scan?.kind === 'sample' || (!scan?.base64Image && matchedFixtureKey)) {
+  if (scan?.kind === 'sample' && !scan?.base64Image && matchedFixtureKey) {
+    const loadedSample = await loadSampleScanPayload(matchedFixtureKey);
+    if (loadedSample) {
+      effectiveScan = loadedSample;
+    }
+  }
+
+  // Only fall back immediately if we have no base64 image (e.g., unit test environment)
+  if (!effectiveScan?.base64Image && matchedFixtureKey) {
     const fixture =
       SAMPLE_PRESCRIPTION_FIXTURES[matchedFixtureKey] ||
       SAMPLE_PRESCRIPTION_FIXTURES['cura_sample_image1.jpg'];
@@ -327,8 +356,8 @@ export async function readPrescription({ scan = null } = {}) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          imageBase64: scan?.base64Image || '',
-          mimeType: scan?.mimeType || 'image/jpeg',
+          imageBase64: effectiveScan?.base64Image || '',
+          mimeType: effectiveScan?.mimeType || 'image/jpeg',
           sampleName: matchedFixtureKey || null
         })
       });
@@ -340,11 +369,24 @@ export async function readPrescription({ scan = null } = {}) {
         throw new Error('The prescription reader is busy right now (Rate limit). Please try again shortly or enter medicines manually.');
       }
       if (!response.ok) {
-        throw new Error(`Service temporarily unavailable (${response.status}).`);
+        let serverMsg = '';
+        try {
+          const errPayload = await response.json();
+          serverMsg = errPayload?.error || '';
+        } catch (_) {
+          // ignore JSON parse error
+        }
+        throw new Error(serverMsg || `Service temporarily unavailable (${response.status}).`);
       }
 
       const ocrJson = await response.json();
-      const schedule = buildScheduleFromOcr(ocrJson);
+      const built = buildScheduleFromOcr(ocrJson);
+      const schedule = {
+        ...built,
+        sourceKind: effectiveScan?.kind || 'image',
+        sourceFileName: effectiveScan?.fileName || null,
+        aiModel: ocrJson?.model || null
+      };
       return { ok: true, ocrJson, schedule };
     } catch (err) {
       lastError = err;
@@ -353,6 +395,16 @@ export async function readPrescription({ scan = null } = {}) {
         break;
       }
     }
+  }
+
+  if (matchedFixtureKey) {
+    const fixture = SAMPLE_PRESCRIPTION_FIXTURES[matchedFixtureKey];
+    return {
+      ok: true,
+      ocrJson: fixture,
+      schedule: buildScheduleFromOcr(fixture),
+      usedSampleFallback: true
+    };
   }
 
   return {

@@ -1,3 +1,5 @@
+import { formatTimeString } from '../utils/dates.js';
+
 // Provider-based Caregiver Dispatch Service (WhatsApp wa.me and SMS hand-off)
 
 /**
@@ -15,13 +17,69 @@ export function isValidInternationalPhone(rawPhone = '') {
 }
 
 /**
- * Builds the exact confirmation message from stored profile and slot time:
- * "<patientName> took the <slot time> medicines."
+ * Resolves the registered caregiver/person mobile contact from stored contacts or profile.
  */
-export function buildConfirmationMessage({ patientName = 'Ramesh', slotTime = '7:00 AM' } = {}) {
+export function getRegisteredContact(contacts = [], profile = null) {
+  const list = Array.isArray(contacts) ? contacts : [];
+  const validFromList = list.find((c) => isValidInternationalPhone(c?.phone));
+  if (validFromList) {
+    return validFromList;
+  }
+  if (profile?.phone && isValidInternationalPhone(profile.phone)) {
+    return {
+      id: 'profile-contact',
+      name: profile.userName || profile.patientName || 'Caregiver',
+      relation: profile.role === 'caretaker' ? 'Caregiver' : 'Self',
+      phone: sanitizePhoneDigits(profile.phone)
+    };
+  }
+  return list[0] || null;
+}
+
+/**
+ * Builds the exact confirmation message from stored profile and slot time:
+ * 💊 *CURA Update*
+ * • <patientName> took the <slotTime> dose.
+ * • Verified at <verifiedTime> ✅
+ */
+export function buildConfirmationMessage({
+  patientName = 'Ramesh',
+  slotTime = '7:00 AM',
+  verifiedTime = ''
+} = {}) {
   const cleanName = String(patientName || 'Patient').trim();
   const cleanTime = String(slotTime || '7:00 AM').trim();
-  return `${cleanName} took the ${cleanTime} medicines.`;
+  const verified = String(verifiedTime || formatTimeString(new Date())).trim();
+
+  return [
+    '💊 *CURA Update*',
+    `• ${cleanName} took the ${cleanTime} dose.`,
+    `• Verified at ${verified} ✅`
+  ].join('\n');
+}
+
+/**
+ * Builds the WhatsApp confirmation message when a medicine dose is verified/taken:
+ * 💊 *CURA Update*
+ * • <patientName> took the <slotTime> dose.
+ * • Verified at <verifiedTime> ✅
+ */
+export function buildMedicineTakenMessage({
+  patientName = 'Ramesh',
+  medicine = null,
+  slot = null,
+  slotTime = '',
+  verifiedTime = ''
+} = {}) {
+  const cleanPatient = String(patientName || 'Patient').trim();
+  const timeLabel = String(slot?.time || slotTime || '7:00 AM').trim();
+  const verified = String(verifiedTime || formatTimeString(new Date())).trim();
+
+  return [
+    '💊 *CURA Update*',
+    `• ${cleanPatient} took the ${timeLabel} dose.`,
+    `• Verified at ${verified} ✅`
+  ].join('\n');
 }
 
 /**
@@ -48,7 +106,7 @@ const providers = {
     buildUrl({ phone, message }) {
       const digits = sanitizePhoneDigits(phone);
       const encoded = encodeURIComponent(message || '');
-      return `https://wa.me/${digits}?text=${encoded}`;
+      return `https://api.whatsapp.com/send?phone=${digits}&text=${encoded}`;
     },
     send({ phone, message, openWindow = true }) {
       const digits = sanitizePhoneDigits(phone);
@@ -59,7 +117,7 @@ const providers = {
       if (openWindow && typeof window !== 'undefined') {
         window.open(url, '_blank', 'noopener,noreferrer');
       }
-      return { ok: true, url };
+      return { ok: true, url, message };
     }
   },
   sms: {
@@ -79,7 +137,7 @@ const providers = {
         // Opening the SMS app replaces the current tab, so this is a navigation.
         window.location.href = url;
       }
-      return { ok: true, url };
+      return { ok: true, url, message };
     }
   }
 };
@@ -98,11 +156,35 @@ export function dispatchToContact({
   contact,
   patientName,
   slotTime,
+  verifiedTime = '',
   provider = 'whatsapp',
   openWindow = true
 } = {}) {
   const activeProvider = providers[provider] || providers.whatsapp;
-  const message = buildConfirmationMessage({ patientName, slotTime });
+  const message = buildConfirmationMessage({ patientName, slotTime, verifiedTime });
+  return activeProvider.send({
+    phone: contact?.phone || '',
+    message,
+    openWindow
+  });
+}
+
+/**
+ * Dispatches a WhatsApp (or SMS) confirmation to the registered caregiver/person
+ * immediately when a medicine checkbox is ticked as taken.
+ */
+export function dispatchMedicineTaken({
+  contact,
+  patientName,
+  medicine,
+  slot,
+  slotTime = '',
+  verifiedTime = '',
+  provider = 'whatsapp',
+  openWindow = true
+} = {}) {
+  const activeProvider = providers[provider] || providers.whatsapp;
+  const message = buildMedicineTakenMessage({ patientName, medicine, slot, slotTime, verifiedTime });
   return activeProvider.send({
     phone: contact?.phone || '',
     message,

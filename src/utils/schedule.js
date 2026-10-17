@@ -7,7 +7,7 @@ const catalogEntries = medicinesCatalog?.medicines || [];
 
 // Flatten catalog for Fuse.js searching across generic and brand names
 const searchIndex = [];
-catalogEntries.forEach(entry => {
+catalogEntries.forEach((entry) => {
   searchIndex.push({
     searchTerm: entry.generic,
     generic: entry.generic,
@@ -16,7 +16,7 @@ catalogEntries.forEach(entry => {
     common_strengths: entry.common_strengths || [],
     isBrand: false
   });
-  (entry.brands || []).forEach(brand => {
+  (entry.brands || []).forEach((brand) => {
     searchIndex.push({
       searchTerm: brand,
       generic: entry.generic,
@@ -32,30 +32,13 @@ catalogEntries.forEach(entry => {
 const fuse = new Fuse(searchIndex, {
   keys: ['searchTerm', 'generic'],
   includeScore: true,
-  threshold: 0.42,
+  threshold: 0.35,
   ignoreLocation: true
 });
 
 /**
  * Decodes prescription frequency and meal shorthand into Cura's 4 daily slots
  * and food instructions. Never guesses unknown shorthand (sets needsReview: true).
- *
- * Supported frequency patterns:
- * - "1-0-1" / "1+0+1" -> ['dawn', 'night']
- * - "1-1-1" / "1+1+1" -> ['dawn', 'midday', 'night']
- * - "1-1-1-1" / "1+1+1+1" -> ['dawn', 'midday', 'dusk', 'night']
- * - "1-0-0" -> ['dawn'], "0-1-0" -> ['midday'], "0-0-1" -> ['night']
- * - "1-1-0" -> ['dawn', 'midday'], "0-1-1" -> ['midday', 'night']
- * - "OD" / "QD" / "once daily" -> ['dawn']
- * - "BD" / "BID" / "twice daily" -> ['dawn', 'night']
- * - "TDS" / "TID" / "thrice daily" -> ['dawn', 'midday', 'night']
- * - "QID" / "four times daily" -> ['dawn', 'midday', 'dusk', 'night']
- * - "HS" / "at bedtime" / "bedtime" -> ['night']
- *
- * Supported food patterns:
- * - "AC" / "before food" / "before meals" / "empty stomach" -> "Before food" / "Empty stomach"
- * - "PC" / "after food" / "after meals" -> "After food"
- * - "after breakfast/lunch/dinner", "before breakfast/lunch/dinner" -> also implies slot if no explicit frequency
  */
 export function decodeShorthand(frequencyRaw = '', foodRaw = '') {
   const freqText = String(frequencyRaw || '').trim();
@@ -92,19 +75,29 @@ export function decodeShorthand(frequencyRaw = '', foodRaw = '') {
     recognizedFrequency = slots.length > 0;
   } else if (!ambiguousFrequency) {
     // Latin / standard medical abbreviations
-    if (/\b(qid|q\.i\.d\.|four times a day|4 times a day)\b/i.test(freqText)) {
+    if (/\b(qid|q\.i\.d\.|four times a day|4 times a day|four times daily)\b/i.test(freqText)) {
       slots = ['dawn', 'midday', 'dusk', 'night'];
       recognizedFrequency = true;
-    } else if (/\b(tds|t\.d\.s\.|tid|t\.i\.d\.|thrice daily|three times a day|3 times a day)\b/i.test(freqText)) {
+    } else if (
+      /\b(tds|t\.d\.s\.|tid|t\.i\.d\.|thrice daily|three times a day|3 times a day|three times daily)\b/i.test(
+        freqText
+      )
+    ) {
       slots = ['dawn', 'midday', 'night'];
       recognizedFrequency = true;
-    } else if (/\b(bd|b\.d\.|bid|b\.i\.d\.|twice daily|twice a day|2 times a day)\b/i.test(freqText)) {
+    } else if (
+      /\b(bd|b\.d\.|bid|b\.i\.d\.|twice daily|twice a day|2 times a day|morning and night)\b/i.test(
+        freqText
+      )
+    ) {
       slots = ['dawn', 'night'];
       recognizedFrequency = true;
-    } else if (/\b(hs|h\.s\.|bedtime|at bedtime|at night|qhs)\b/i.test(freqText)) {
+    } else if (/\b(hs|h\.s\.|bedtime|at bedtime|at night|qhs|every night|once at night)\b/i.test(freqText)) {
       slots = ['night'];
       recognizedFrequency = true;
-    } else if (/\b(od|o\.d\.|qd|q\.d\.|once daily|once a day|morning)\b/i.test(freqText)) {
+    } else if (
+      /\b(od|o\.d\.|qd|q\.d\.|once daily|once a day|morning|every morning|daily)\b/i.test(freqText)
+    ) {
       slots = ['dawn'];
       recognizedFrequency = true;
     }
@@ -165,8 +158,9 @@ export function decodeShorthand(frequencyRaw = '', foodRaw = '') {
 }
 
 /**
- * Fuzzy-matches an array of OCR name_candidates (or a single string) against medicines.json.
- * Flags low confidence (< 0.75) as needing review.
+ * Matches an array of OCR name_candidates (or a single string) against medicines.json
+ * while preserving the exact Gemini-extracted name when a medicine is not in the small
+ * local catalog. Flags low confidence (< 0.75) as needing review.
  */
 export function matchMedicineName(candidatesOrName) {
   const candidates = Array.isArray(candidatesOrName)
@@ -191,25 +185,28 @@ export function matchMedicineName(candidatesOrName) {
 
   for (const cand of candidates.slice(0, 3)) {
     const rawName = String(cand.name || '')
-      .replace(/^(tab\.?|cap\.?|syp\.?|inj\.?|t\.|c\.)\s*/i, '')
+      .replace(/^(tab\.?|cap\.?|syp\.?|inj\.?|t\.|c\.|adv:?)\s*/i, '')
       .trim();
     if (!rawName) continue;
 
-    const ocrConf = typeof cand.confidence === 'number' ? cand.confidence : 0.8;
+    const ocrConf = typeof cand.confidence === 'number' ? cand.confidence : 0.85;
     const hits = fuse.search(rawName);
+    const topHit = hits.length > 0 ? hits[0] : null;
 
-    if (hits.length > 0) {
-      const topHit = hits[0];
-      const fuseSimilarity = 1 - (topHit.score ?? 0.5);
+    if (topHit && (topHit.score ?? 1) <= 0.22) {
+      const fuseSimilarity = 1 - (topHit.score ?? 0);
       const combined = Number((ocrConf * 0.6 + fuseSimilarity * 0.4).toFixed(2));
       if (combined > bestCombinedConfidence) {
         bestCombinedConfidence = combined;
         bestResult = topHit.item;
         bestRawCandidate = { ...cand, cleanedName: rawName };
       }
-    } else if (ocrConf * 0.5 > bestCombinedConfidence) {
-      bestCombinedConfidence = Number((ocrConf * 0.5).toFixed(2));
-      bestRawCandidate = { ...cand, cleanedName: rawName };
+    } else {
+      const directConf = Number(ocrConf.toFixed(2));
+      if (directConf > bestCombinedConfidence) {
+        bestCombinedConfidence = directConf;
+        bestRawCandidate = { ...cand, cleanedName: rawName };
+      }
     }
   }
 
@@ -235,7 +232,7 @@ export function matchMedicineName(candidatesOrName) {
 export function searchMedicinesCatalog(query = '') {
   const q = String(query || '').trim();
   if (!q) {
-    return catalogEntries.slice(0, 12).map(e => ({
+    return catalogEntries.slice(0, 12).map((e) => ({
       name: e.generic,
       generic: e.generic,
       drug_class: e.drug_class,
@@ -243,7 +240,7 @@ export function searchMedicinesCatalog(query = '') {
       common_strengths: e.common_strengths
     }));
   }
-  return fuse.search(q, { limit: 8 }).map(r => ({
+  return fuse.search(q, { limit: 8 }).map((r) => ({
     name: r.item.isBrand ? `${r.item.brandName} (${r.item.generic})` : r.item.generic,
     displayName: r.item.isBrand ? r.item.brandName : r.item.generic,
     generic: r.item.generic,
@@ -273,10 +270,8 @@ export function defaultDoseLabel(form = 'tablet') {
 
 /**
  * Converts the raw JSON from /api/read-prescription into a Cura schedule object.
- * Applies shorthand decoding, Fuse.js matching, and strict needsReview rules.
- *
- * The medicine name and description come from the AI; `dose`, `slots` and `food`
- * are the fields the user confirms or corrects on the review screen.
+ * Preserves both Gemini's extracted medicine names/dosages/timings AND Gemini's
+ * plain-language medicine info (`explanation`).
  */
 export function buildScheduleFromOcr(ocrData) {
   const rawMeds = Array.isArray(ocrData?.medicines) ? ocrData.medicines : [];
@@ -286,9 +281,7 @@ export function buildScheduleFromOcr(ocrData) {
     const decoded = decodeShorthand(item.frequency_raw, item.food_raw);
     const strength = String(item.strength || '').trim();
     const form =
-      item.form && item.form !== 'unknown'
-        ? item.form
-        : match.defaultForm || 'tablet';
+      item.form && item.form !== 'unknown' ? item.form : match.defaultForm || 'tablet';
 
     const notLegible = item.legible === false || (item.name_candidates || []).length === 0;
     const missingStrength = !strength;
@@ -305,13 +298,39 @@ export function buildScheduleFromOcr(ocrData) {
     if (item.duration) notesParts.push(`for ${item.duration}`);
 
     const doseRaw = String(item.dose_raw || '').trim();
+    const resolvedName = match.matchedName || 'Unreadable medicine';
+    const resolvedGeneric =
+      String(item.generic_name || '').trim() || match.genericName || resolvedName;
+    const resolvedDrugClass =
+      String(item.drug_class || '').trim() || match.drugClass || 'Prescribed medication';
+
+    const hasGeminiExplanation = Boolean(
+      item.commonly_used_for || item.how_it_helps || item.good_to_know || item.ask_pharmacist_if
+    );
+
+    const explanation = hasGeminiExplanation
+      ? {
+          generic_name: resolvedGeneric,
+          drug_class: resolvedDrugClass,
+          commonly_used_for: String(item.commonly_used_for || '').trim(),
+          how_it_helps: String(item.how_it_helps || '').trim(),
+          good_to_know: String(item.good_to_know || '').trim(),
+          ask_pharmacist_if: String(
+            item.ask_pharmacist_if ||
+              'Ask your pharmacist what to do if you miss a dose, feel unwell, or take other medicines.'
+          ).trim(),
+          confidence: match.confidence || 0.9,
+          unsure: false,
+          fromGemini: true
+        }
+      : null;
 
     return {
       id: `med-${Date.now()}-${idx + 1}`,
-      name: match.matchedName || 'Unreadable medicine',
-      nameRead: item.name_candidates?.[0]?.name || item.raw_text || match.matchedName,
-      genericName: match.genericName || match.matchedName,
-      drugClass: match.drugClass || '',
+      name: resolvedName,
+      nameRead: item.name_candidates?.[0]?.name || item.raw_text || resolvedName,
+      genericName: resolvedGeneric,
+      drugClass: resolvedDrugClass,
       strength: strength || '',
       form,
       /** Amount taken each time — the AI suggests it, the user confirms it. */
@@ -324,7 +343,8 @@ export function buildScheduleFromOcr(ocrData) {
       /** Exactly what the AI saw on the sheet, shown back for verification. */
       sourceRaw: String(item.raw_text || '').trim(),
       confidence: match.confidence,
-      needsReview
+      needsReview,
+      explanation
     };
   });
 
@@ -342,15 +362,15 @@ export function buildScheduleFromOcr(ocrData) {
  */
 export function groupMedicinesBySlot(medicines = [], dateIso, doseLog = [], slots = SLOTS) {
   const activeSlots = Array.isArray(slots) && slots.length > 0 ? slots : SLOTS;
-  return activeSlots.map(slot => {
+  return activeSlots.map((slot) => {
     const medsInSlot = (medicines || []).filter(
-      m => Array.isArray(m.slots) && m.slots.includes(slot.id)
+      (m) => Array.isArray(m.slots) && m.slots.includes(slot.id)
     );
     const isCompleted =
       medsInSlot.length > 0 &&
-      medsInSlot.every(med =>
+      medsInSlot.every((med) =>
         doseLog.some(
-          entry => entry.date === dateIso && entry.slot === slot.id && entry.medId === med.id
+          (entry) => entry.date === dateIso && entry.slot === slot.id && entry.medId === med.id
         )
       );
     return {
@@ -359,6 +379,35 @@ export function groupMedicinesBySlot(medicines = [], dateIso, doseLog = [], slot
       isCompleted
     };
   });
+}
+
+/**
+ * Counts the exact number of scheduled dose checkboxes across the day's slotGroups
+ * and how many of those specific checkboxes are marked taken for `dateIso`.
+ * Guarantees `taken` never exceeds `total` and ticking all boxes always yields `taken === total`.
+ */
+export function countDailyDoses(slotGroups = [], dateIso = '', doseLog = []) {
+  let total = 0;
+  let taken = 0;
+
+  for (const group of slotGroups || []) {
+    const meds = Array.isArray(group?.medicines) ? group.medicines : [];
+    for (const med of meds) {
+      total += 1;
+      const isTaken = (doseLog || []).some(
+        (entry) => entry.date === dateIso && entry.slot === group.id && entry.medId === med.id
+      );
+      if (isTaken) {
+        taken += 1;
+      }
+    }
+  }
+
+  return {
+    taken,
+    total,
+    remaining: Math.max(0, total - taken)
+  };
 }
 
 /**
@@ -371,8 +420,8 @@ export function describeDose(med, slots = SLOTS) {
   if (med.dose) parts.push(med.dose);
   if (med.food) parts.push(String(med.food).toLowerCase());
   const times = (med.slots || [])
-    .map(id => {
-      const slot = slots.find(s => s.id === id);
+    .map((id) => {
+      const slot = slots.find((s) => s.id === id);
       return slot ? `${slot.label.toLowerCase()} (${slot.time})` : id;
     })
     .join(', ');

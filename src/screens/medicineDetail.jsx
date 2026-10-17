@@ -32,18 +32,28 @@ export default function MedicineDetailScreen({ medIdProp = null }) {
 
   useEffect(() => {
     let cancelled = false;
+    setExplanation(medicine.explanation || null);
     explainMedicine({
       genericName: medicine.genericName || medicine.name,
       strength: medicine.strength,
       form: medicine.form,
-      language: profile?.language || 'en'
+      language: profile?.language || 'en',
+      preloadedExplanation: medicine.explanation || null
     }).then((res) => {
       if (!cancelled) setExplanation(res);
     });
     return () => {
       cancelled = true;
     };
-  }, [medicine.name, medicine.genericName, medicine.strength, medicine.form, profile?.language]);
+  }, [
+    medicine.id,
+    medicine.name,
+    medicine.genericName,
+    medicine.strength,
+    medicine.form,
+    medicine.explanation,
+    profile?.language
+  ]);
 
   const whatItIsFor =
     explanation?.commonly_used_for ||

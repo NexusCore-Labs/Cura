@@ -26,3 +26,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local tools & credentials
+.freebuff/
+api/.env*
